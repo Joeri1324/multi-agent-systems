@@ -46,8 +46,8 @@ to setup
   reset-ticks
   set time 0
   setup-vacuums
+  setup-trashcans
   setup-patches
-  setup-beliefs
   setup-ticks
 end
 
@@ -76,17 +76,15 @@ to setup-patches
   ]
 end
 
-to setup-beliefs
-  ask vacuums [
-    set beliefs [self] of patches with [pcolor = brown]
-  ]
-end
-
-
 ; --- Setup vacuums ---
 to setup-vacuums
   ; In this method you may create the vacuum cleaner agents (in this case, there is only 1 vacuum cleaner agent).
   create-vacuums 1 [ setxy random-xcor random-ycor ]
+end
+
+
+to setup-trashcans
+  create-trashcans 1 [ setxy random-xcor random-ycor ]
 end
 
 
@@ -116,6 +114,9 @@ to update-beliefs
   ; This belief set needs to be updated frequently according to the cleaning actions: if you clean dirt, you do not believe anymore there is a dirt at that location.
   ; In Assignment 1.3, your agent also needs to know where is the garbage can.
   set total_dirty count patches with [pcolor = brown]
+  ask vacuums [
+    set beliefs patches with [pcolor = brown]
+  ]
 end
 
 
@@ -123,9 +124,15 @@ end
 to update-intentions
   ask vacuums [
     if desire = 1
-      [ifelse not any? turtles-on first beliefs
+      [ifelse not any? turtles-on min-one-of beliefs [distance myself]
         [set intention 1]
         [set intention 0]
+      if bag = bag_size
+        [ifelse any? other turtles-here
+          [set intention 3]
+          [set intention 2]
+
+        ]
       ]]
 end
 
@@ -134,11 +141,20 @@ end
 to execute-actions
   ask vacuums [
     if desire = 1
-      [ifelse intention = 1
-        [ face first beliefs
+      [if intention = 1
+        [ face min-one-of beliefs [distance myself]
           fd 1]
-        [ask first beliefs [set pcolor white]
-          set beliefs remove-item 0 beliefs]]
+      if intention = 0
+        [ask  min-one-of beliefs [distance myself] [set pcolor white]
+          set bag (bag + 1)]
+      ]
+    if intention = 2
+      [face one-of trashcans
+        fd 1]
+    if intention = 3
+      [set bag 0]
+
+
   ]
   set time (time + 1)
 end
@@ -146,10 +162,10 @@ end
 GRAPHICS-WINDOW
 782
 17
-1380
-616
--1
--1
+1382
+638
+12
+12
 23.6
 1
 10
@@ -179,7 +195,7 @@ dirt_pct
 dirt_pct
 0
 100
-10.0
+10
 1
 1
 NIL
@@ -287,6 +303,32 @@ MONITOR
 295
 The agent's current intention.
 [intention] of vacuum 0
+17
+1
+11
+
+SLIDER
+140
+344
+769
+377
+bag_size
+bag_size
+0
+100
+6
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+11
+343
+136
+388
+NIL
+[bag] of vacuum 0
 17
 1
 11
@@ -680,8 +722,9 @@ false
 0
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
+
 @#$#@#$#@
-NetLogo 6.0.2
+NetLogo 5.3.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
@@ -697,6 +740,7 @@ true
 0
 Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
+
 @#$#@#$#@
 0
 @#$#@#$#@
