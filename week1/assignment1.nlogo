@@ -46,6 +46,7 @@ to setup
   set time 0
   setup-vacuums
   setup-patches
+  setup-beliefs
   setup-ticks
 end
 
@@ -54,21 +55,29 @@ end
 to go
   ; This method executes the main processing cycle of an agent.
   ; For Assignment 1, this involves updating desires, beliefs and intentions, and executing actions (and advancing the tick counter).
-  update-desires
   update-beliefs
+  update-desires
   update-intentions
   execute-actions
   tick
 end
 
 
+
+
 ; --- Setup patches ---
 to setup-patches
   ; In this method you may create the environment (patches), using colors to define dirty and cleaned cells.
   ask patches[
-     ifelse random-float 100 < dirt_pct
-       [ set pcolor brown]
-       [ set pcolor white]
+    ifelse random-float 100 < dirt_pct
+      [ set pcolor brown]
+      [ set pcolor white]
+  ]
+end
+
+to setup-beliefs
+  ask vacuums [
+    set beliefs [self] of patches with [pcolor = brown]
   ]
 end
 
@@ -82,7 +91,7 @@ end
 
 ; --- Setup ticks ---
 to setup-ticks
-  ; In this method you may start the tick counter.
+
 end
 
 
@@ -91,43 +100,55 @@ to update-desires
   ; You should update your agent's desires here.
   ; At the beginning your agent should have the desire to clean all the dirt.
   ; If it realises that there is no more dirt, its desire should change to something like 'stop and turn off'.
-    ask vacuums [
-      ifelse total_dirty > 0
-      [set desire "WALL-E MODE ACTIVATED"]
-      [set desire "Cleaning done, now hibernating"]
+  ask vacuums [
+    ifelse total_dirty > 0
+      [set desire 1]
+      [set desire 0]
   ]
 end
 
 
 ; --- Update desires ---
 to update-beliefs
- ; You should update your agent's beliefs here.
- ; At the beginning your agent will receive global information about where all the dirty locations are.
- ; This belief set needs to be updated frequently according to the cleaning actions: if you clean dirt, you do not believe anymore there is a dirt at that location.
- ; In Assignment 1.3, your agent also needs to know where is the garbage can.
- set total_dirty count patches with [pcolor = brown]
+  ; You should update your agent's beliefs here.
+  ; At the beginning your agent will receive global information about where all the dirty locations are.
+  ; This belief set needs to be updated frequently according to the cleaning actions: if you clean dirt, you do not believe anymore there is a dirt at that location.
+  ; In Assignment 1.3, your agent also needs to know where is the garbage can.
+  set total_dirty count patches with [pcolor = brown]
 end
 
 
 ; --- Update intentions ---
 to update-intentions
-  ; You should update your agent's intentions here.
-  ; The agent's intentions should be dependent on its beliefs and desires.
+  ask vacuums [
+    if desire = 1
+      [ifelse not any? turtles-on first beliefs
+        [set intention 1]
+        [set intention 0]
+      ]]
 end
 
 
 ; --- Execute actions ---
 to execute-actions
-  ; Here you should put the code related to the actions performed by your agent: moving and cleaning (and in Assignment 1.3, throwing away dirt).
+  ask vacuums [
+    if desire = 1
+      [ifelse intention = 1
+        [ face first beliefs
+          fd 1]
+        [ask first beliefs [set pcolor white]
+          set beliefs remove-item 0 beliefs]]
+  ]
+  set time (time + 1)
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 782
 17
-1380
-616
--1
--1
+1382
+638
+12
+12
 23.6
 1
 10
@@ -157,7 +178,7 @@ dirt_pct
 dirt_pct
 0
 100
-6.0
+10
 1
 1
 NIL
@@ -658,8 +679,9 @@ false
 0
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
+
 @#$#@#$#@
-NetLogo 6.0.2
+NetLogo 5.3.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
@@ -675,6 +697,7 @@ true
 0
 Line -7500403 true 150 150 90 180
 Line -7500403 true 150 150 210 180
+
 @#$#@#$#@
 0
 @#$#@#$#@
