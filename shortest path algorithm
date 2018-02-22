@@ -1,0 +1,53 @@
+;function which calculates shortest path between two bus stops
+;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
+to-report shortest-path [bs1 bs2]
+  show word "START POINT: " bs1
+  show word "END POINT: " bs2
+  if bs1 = bs2 [ show "NO NEED TO CALCULATE: THE BUS STOPS ARE THE SAME" ]
+  let h_values []
+  repeat 24 [ set h_values lput 0 h_values ]
+  
+  let dummy_start -1
+  let visited []
+  let dummy_visited -1
+  while [ visited != dummy_visited ] [  
+    set dummy_start bs1
+    ;show word "DUMMY START: " dummy_start
+    set visited dummy_visited
+    set dummy_visited []
+    
+  
+    while [ dummy_start != bs2 ] [ 
+      set dummy_visited lput dummy_start dummy_visited
+      ;show word "VISITED: " visited
+      ;show word "DUMMY_VISITED:" dummy_visited
+      let next_stops sort ([link-neighbors] of dummy_start) ;with [ not member? self dummy_visited ]
+      ;show word "NEXT STOPS: " next_stops
+      let argmin_node -1
+      let next_stop_distances []
+    
+      foreach next_stops [
+        ;show word "STOP IS: " ?
+        let f_value ([route_size] of route [who] of dummy_start [who] of ?) + (item [who] of ? h_values)
+        ;show word "F VALUE: " f_value
+        set next_stop_distances lput f_value next_stop_distances
+        ;show word "NEXT STOP DISTANCES" next_stop_distances
+        ;show word "NEXT STOP DISTANCES MINIMUM" min next_stop_distances
+        if f_value = min next_stop_distances [
+          set argmin_node ?
+        ]
+      ]
+    
+      if item [who] of dummy_start h_values < min next_stop_distances [
+        set h_values replace-item ([who] of dummy_start) h_values (min next_stop_distances)
+      ]
+      ;show word "ARGMIN NODE: " argmin_node
+      ;show word "H VALUES" h_values
+      ;show "______________________________________________________________________"
+      set dummy_start argmin_node    
+    ]
+  ]
+  set visited lput bs2 visited
+  show visited
+  report visited
+end
