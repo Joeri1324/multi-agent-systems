@@ -15,10 +15,9 @@ buses-own [
   ; New local variables for students.
   ; You can create any new local variable you want. Just declare them here.
   added-bus
-  destination     ; 
+  destination  
   distances
-]
- 
+
 globals [graph]
 
 to init-buses
@@ -90,19 +89,6 @@ to execute-actions
   ; You are allowed to use the global variable 'ticks'.
   let at_bus_stop current_stop != -1
   
-  let bus_full 0
-  if length bus_passengers = 12 and bus_type = 1  [
-    set bus_full 1
-  ]
-  if length bus_passengers = 60 and bus_type = 2 [
-    set bus_full 1
-  ]
-  if length bus_passengers = 150 and bus_type = 3  [
-    set bus_full 1
-  ]
-  
-  if bus_full = 1 [
-    add-bus 0
   ]
   
   ifelse at_bus_stop [
@@ -128,7 +114,6 @@ to execute-actions
       ]
     ]
     
-   
     if current_stop = destination [
       set destination 0
     ]
