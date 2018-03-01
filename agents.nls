@@ -1,4 +1,4 @@
-__includes [ "utils.nls" ]
+extensions [array]
 
 buses-own [
   ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
@@ -20,6 +20,7 @@ buses-own [
   long_term_path ; List containing the route the bus is taking for the next few moves
   route_type ; integer denoting the type of route the bus is taking
   next_intended_stop ; a next_stop style variable that we are allowed to modify
+  distances ;
 ]
  
 globals [graph]
@@ -31,7 +32,8 @@ to init-buses
   set route_type 0
   if ticks = 300 or ticks = 350 [ set route_type 1 ]
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
-  set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]] 
+  set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
+  set distances n-values length graph [dijkstra ?] 
 end
 
 to execute-actions
@@ -55,6 +57,45 @@ to execute-actions
   send-message 24 long_term_path
   ]
   travel-to next_intended_stop         
+end
+
+;_________________________________________________________________________________________________
+
+to-report dijkstra [vertexFrom]
+  let Q  n-values 24 [?]
+  let S []
+  
+  let dist array:from-list n-values length graph [1000000] ; should be infinity but large number will work
+  let prev array:from-list n-values length graph [0] ;
+  
+  array:set dist vertexFrom 0
+  
+  while [length Q != 0] [
+    ; let l filter [not member? ? S] Q
+    ; print l
+    let v one-of Q
+    
+    foreach Q [ ; find lowest distance which is not visited yet
+      if array:item dist ? < array:item dist v [
+         set v ?
+      ]
+    ]
+    set Q remove v Q
+    ; set S lput v S ; add u to visited nodes
+    
+    let adjacent item v graph
+    foreach adjacent [
+      if (array:item dist v + get-distance ? v) < array:item dist ? [
+        array:set dist ? array:item dist v + get-distance ? v
+        array:set prev  ? v
+      ]
+    ]
+  ]
+ 
+  let result []
+  set result lput prev result
+  set result lput dist result
+  report result
 end
 
 ;_________________________________________________________________________________________________
@@ -242,40 +283,18 @@ end
 ;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
 to-report shortest-path [bs1 bs2]
   if bs1 = bs2 [ show "NO NEED TO CALCULATE: THE BUS STOPS ARE THE SAME" ]
-  let h_values []
-  repeat 24 [ set h_values lput 0 h_values ]
-  
-  let dummy_start -1
-  let visited []
-  let dummy_visited -1
-  while [ visited != dummy_visited ] [  
-    set dummy_start bs1
-    set visited dummy_visited
-    set dummy_visited []
-    
-    while [ dummy_start != bs2 ] [ 
-      set dummy_visited lput dummy_start dummy_visited
-      let next_stops sort ([link-neighbors] of dummy_start)
-      let argmin_node -1
-      let next_stop_distances []
-    
-      foreach next_stops [
-        let f_value ([route_size] of route [who] of dummy_start [who] of ?) + (item [who] of ? h_values)
-        set next_stop_distances lput f_value next_stop_distances
-        if f_value = min next_stop_distances [
-          set argmin_node ?
-        ]
-      ]
-    
-      if item [who] of dummy_start h_values < min next_stop_distances [
-        set h_values replace-item ([who] of dummy_start) h_values (min next_stop_distances)
-      ]
-      set dummy_start argmin_node    
-    ]
+  let backpointers item 0 (item [who] of bs1 distances)
+  let node_pointer [who] of bs2
+  let full_path []
+  set full_path lput [who] of bs2 full_path
+  while [array:item backpointers node_pointer != [who] of bs1] [
+    set node_pointer (array:item backpointers node_pointer)
+    set full_path lput node_pointer full_path
   ]
-  set visited lput bs2 visited
-  report visited
+  set full_path lput [who] of bs1 full_path
+  report reverse map [bus_stop(?)] full_path
 end
+
 
 ;function which takes in a bus stop id and returns a list corresponding to how many passengers
 ;at the bus stop want to go to each of the 24 destinations
