@@ -1,1 +1,53 @@
-;THIS IS A FILE WHERE WE STORE UTILSJH
+;THIS IS A FILE WHERE WE STORE UTILS
+
+;returns true if the bus has reached capacity, false otherwise
+to-report has-reached-capacity? [bus]
+  let truth_value false
+  let capacity 0
+  if bus_type = 1 [set capacity 12]
+  if bus_type = 2 [set capacity 60]
+  if bus_type = 3 [set capacity 150]
+  if length bus_passengers = capacity [ 
+    set truth_value true
+    ]
+  report truth_value
+end
+
+;function which calculates shortest path between two bus stops
+;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
+to-report shortest-path [bs1 bs2]
+  if bs1 = bs2 [ show "NO NEED TO CALCULATE: THE BUS STOPS ARE THE SAME" ]
+  let h_values []
+  repeat 24 [ set h_values lput 0 h_values ]
+  
+  let dummy_start -1
+  let visited []
+  let dummy_visited -1
+  while [ visited != dummy_visited ] [  
+    set dummy_start bs1
+    set visited dummy_visited
+    set dummy_visited []
+    
+    while [ dummy_start != bs2 ] [ 
+      set dummy_visited lput dummy_start dummy_visited
+      let next_stops sort ([link-neighbors] of dummy_start)
+      let argmin_node -1
+      let next_stop_distances []
+    
+      foreach next_stops [
+        let f_value ([route_size] of route [who] of dummy_start [who] of ?) + (item [who] of ? h_values)
+        set next_stop_distances lput f_value next_stop_distances
+        if f_value = min next_stop_distances [
+          set argmin_node ?
+        ]
+      ]
+    
+      if item [who] of dummy_start h_values < min next_stop_distances [
+        set h_values replace-item ([who] of dummy_start) h_values (min next_stop_distances)
+      ]
+      set dummy_start argmin_node    
+    ]
+  ]
+  set visited lput bs2 visited
+  report visited
+end
