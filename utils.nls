@@ -1,1 +1,97 @@
-;THIS IS A FILE WHERE WE STORE UTILSJH
+;THIS IS A FILE WHERE WE STORE UTILS
+
+;returns true if the bus has reached capacity, false otherwise
+to-report has-reached-capacity? [bus]
+  let truth_value false
+  let capacity 0
+  if bus_type = 1 [set capacity 12]
+  if bus_type = 2 [set capacity 60]
+  if bus_type = 3 [set capacity 150]
+  if length bus_passengers = capacity [ 
+    set truth_value true
+    ]
+  report truth_value
+end
+
+;function which calculates shortest path between two bus stops
+;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
+;function which calculates shortest path between two bus stops
+;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
+to-report shortest-path [bs1 bs2]
+  if bs1 = bs2 [ show "NO NEED TO CALCULATE: THE BUS STOPS ARE THE SAME" ]
+  let backpointers item 0 (item [who] of bs1 distances)
+  let node_pointer [who] of bs2
+  let full_path []
+  set full_path lput [who] of bs2 full_path
+  while [array:item backpointers node_pointer != [who] of bs1] [
+    set node_pointer (array:item backpointers node_pointer)
+    set full_path lput node_pointer full_path
+  ]
+  set full_path lput [who] of bs1 full_path
+  report reverse map [bus_stop(?)] full_path
+end
+
+to-report dijkstra [vertexFrom]
+  let Q  n-values 24 [?]
+  let S []
+  
+  let dist array:from-list n-values length graph [1000000] ; should be infinity but large number will work
+  let prev array:from-list n-values length graph [0] ;
+  
+  array:set dist vertexFrom 0
+  
+  while [length Q != 0] [
+    ; let l filter [not member? ? S] Q
+    ; print l
+    let v one-of Q
+    
+    foreach Q [ ; find lowest distance which is not visited yet
+      if array:item dist ? < array:item dist v [
+         set v ?
+      ]
+    ]
+    set Q remove v Q
+    ; set S lput v S ; add u to visited nodes
+    
+    let adjacent item v graph
+    foreach adjacent [
+      if (array:item dist v + get-distance ? v) < array:item dist ? [
+        array:set dist ? array:item dist v + get-distance ? v
+        array:set prev  ? v
+      ]
+    ]
+  ]
+ 
+  let result []
+  set result lput prev result
+  set result lput dist result
+  report result
+end
+
+;function which takes in a bus stop id and returns a list corresponding to how many passengers
+;at the bus stop want to go to each of the 24 destinations
+to-report where-are-passengers-at-stop-going [bs_id]
+  ;initialising the output list
+  let destinations []
+  repeat 24 [ set destinations lput 0 destinations ]
+  
+  ;getting a list of the passengers at the stop
+  let passenger_list get-passengers-at-stop bs_id
+  foreach passenger_list [ 
+    let passenger_destination item 1 ?
+    set destinations replace-item passenger_destination destinations ((item passenger_destination destinations) + 1)
+  ]
+  report destinations
+end
+
+;function which takes in a bus (the actual turtle) and returns a list corresponding to how many passengers
+;on the bus want to go to each of the 24 destinations
+to-report where-are-passengers-on-bus-going [bus]
+  let destinations []
+  repeat 24 [ set destinations lput 0 destinations ]
+  foreach bus_passengers [
+    let passenger_destination item 1 ?
+    set destinations replace-item passenger_destination destinations ((item passenger_destination destinations) + 1)
+  ]
+  report destinations
+end

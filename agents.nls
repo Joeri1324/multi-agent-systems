@@ -1,3 +1,4 @@
+__includes [ "utils.nls" ]
 extensions [array]
 
 buses-own [
@@ -20,7 +21,15 @@ buses-own [
   long_term_path ; List containing the route the bus is taking for the next few moves
   route_type ; integer denoting the type of route the bus is taking
   next_intended_stop ; a next_stop style variable that we are allowed to modify
-  distances ;
+
+  distances ;  
+  beliefs;
+  desires;
+  intentions;
+  
+  route_path;
+  mode;
+  score;
 ]
  
 globals [graph]
@@ -30,7 +39,12 @@ to init-buses
   set long_term_path sort bus_stops
   set next_intended_stop 9
   set route_type 0
+  set score 0
+  set mode 0
   if ticks = 300 or ticks = 350 [ set route_type 1 ]
+  set route_path []
+  repeat 24 [ set route_path lput [] route_path ]
+  set route_path replace-item 5 route_path [3]
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
   set distances n-values length graph [dijkstra ?] 
@@ -51,6 +65,8 @@ to execute-actions
     
     ;doing the actions of the bus relative to its route
     actions-for-route self 
+   
+   move-along-route route_path
   ]
   ;travelling to the next stop
   if bus_id != 24 and ticks mod 15 = 0 [ 
@@ -61,45 +77,39 @@ end
 
 ;_________________________________________________________________________________________________
 
-to-report dijkstra [vertexFrom]
-  let Q  n-values 24 [?]
-  let S []
-  
-  let dist array:from-list n-values length graph [1000000] ; should be infinity but large number will work
-  let prev array:from-list n-values length graph [0] ;
-  
-  array:set dist vertexFrom 0
-  
-  while [length Q != 0] [
-    ; let l filter [not member? ? S] Q
-    ; print l
-    let v one-of Q
-    
-    foreach Q [ ; find lowest distance which is not visited yet
-      if array:item dist ? < array:item dist v [
-         set v ?
-      ]
-    ]
-    set Q remove v Q
-    ; set S lput v S ; add u to visited nodes
-    
-    let adjacent item v graph
-    foreach adjacent [
-      if (array:item dist v + get-distance ? v) < array:item dist ? [
-        array:set dist ? array:item dist v + get-distance ? v
-        array:set prev  ? v
-      ]
-    ]
-  ]
- 
-  let result []
-  set result lput prev result
-  set result lput dist result
-  report result
-end
-
 ;_________________________________________________________________________________________________
 
+
+to move-along-route [ dummy_route_path ]
+  ;if mode is 0, will move to the nearest stop on the route
+  let stops_involved_in_route []
+  foreach n-values (length dummy_route_path) [?] [
+    if item ? dummy_route_path != [] [
+      set stops_involved_in_route lput ? stops_involved_in_route
+    ]
+  ]
+  show stops_involved_in_route
+  show word "CURRENT STOP:" current_stop
+  ifelse member? current_stop stops_involved_in_route [
+    let next_stops item current_stop dummy_route_path
+    show word "NEXT STOPS" next_stops
+    let max_passengers_waiting -1
+    let busiest_stop -1
+    foreach next_stops [
+      let num_passengers_waiting length get-passengers-at-stop ?
+      if num_passengers_waiting > max_passengers_waiting [ 
+        set max_passengers_waiting num_passengers_waiting
+        set busiest_stop ?   
+      ]
+    ]
+    set next_intended_stop busiest_stop
+  ]
+  
+  [
+    let shortest_path shortest-path bus_stop current_stop bus_stop one-of stops_involved_in_route
+    show word "SHORTEST PATH: " shortest_path
+  ]
+end
 
 to drop-off-correct-passengers
   foreach bus_passengers [ 
@@ -265,62 +275,4 @@ to actions-for-route [bus]
 end
 
 ;__________________________________________________________________________________________________________________________________________
-
-;returns true if the bus has reached capacity, false otherwise
-to-report has-reached-capacity? [bus]
-  let truth_value false
-  let capacity 0
-  if bus_type = 1 [set capacity 12]
-  if bus_type = 2 [set capacity 60]
-  if bus_type = 3 [set capacity 150]
-  if length bus_passengers = capacity [ 
-    set truth_value true
-    ]
-  report truth_value
-end
-
-;function which calculates shortest path between two bus stops
-;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
-to-report shortest-path [bs1 bs2]
-  if bs1 = bs2 [ show "NO NEED TO CALCULATE: THE BUS STOPS ARE THE SAME" ]
-  let backpointers item 0 (item [who] of bs1 distances)
-  let node_pointer [who] of bs2
-  let full_path []
-  set full_path lput [who] of bs2 full_path
-  while [array:item backpointers node_pointer != [who] of bs1] [
-    set node_pointer (array:item backpointers node_pointer)
-    set full_path lput node_pointer full_path
-  ]
-  set full_path lput [who] of bs1 full_path
-  report reverse map [bus_stop(?)] full_path
-end
-
-
-;function which takes in a bus stop id and returns a list corresponding to how many passengers
-;at the bus stop want to go to each of the 24 destinations
-to-report where-are-passengers-at-stop-going [bs_id]
-  ;initialising the output list
-  let destinations []
-  repeat 24 [ set destinations lput 0 destinations ]
-  
-  ;getting a list of the passengers at the stop
-  let passenger_list get-passengers-at-stop bs_id
-  foreach passenger_list [ 
-    let passenger_destination item 1 ?
-    set destinations replace-item passenger_destination destinations ((item passenger_destination destinations) + 1)
-  ]
-  report destinations
-end
-
-;function which takes in a bus (the actual turtle) and returns a list corresponding to how many passengers
-;on the bus want to go to each of the 24 destinations
-to-report where-are-passengers-on-bus-going [bus]
-  let destinations []
-  repeat 24 [ set destinations lput 0 destinations ]
-  foreach bus_passengers [
-    let passenger_destination item 1 ?
-    set destinations replace-item passenger_destination destinations ((item passenger_destination destinations) + 1)
-  ]
-  report destinations
-end
 
