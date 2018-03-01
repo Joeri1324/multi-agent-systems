@@ -196,6 +196,8 @@ end
 
 to update-routes
   ask routes [
+    set color red
+    set thickness 0.3
     let xcors []
     let ycors []
     ask n-of 2 both-ends [
@@ -203,7 +205,7 @@ to update-routes
       set ycors lput ycor ycors
     ]
     set route_size sqrt (((item 0 xcors - item 1 xcors) ^ 2) + ((item 0 ycors - item 1 ycors) ^ 2))
-    hide-link
+    ;hide-link
   ]
 end
 
@@ -788,8 +790,8 @@ GRAPHICS-WINDOW
 40
 0
 30
-0
-0
+1
+1
 1
 ticks
 30.0
