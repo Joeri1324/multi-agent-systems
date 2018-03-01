@@ -27,13 +27,13 @@ globals [graph]
 
 to init-buses
   ; Initialize your agents here.
-  set distances n-values length graph [dijkstra ?]
   set long_term_path sort bus_stops
   set next_intended_stop 9
   set route_type 0
   if ticks = 300 or ticks = 350 [ set route_type 1 ]
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
-  set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]] 
+  set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
+  set distances n-values length graph [dijkstra ?] 
 end
 
 to execute-actions
@@ -291,8 +291,10 @@ to-report shortest-path [bs1 bs2]
     set node_pointer (array:item backpointers node_pointer)
     set full_path lput node_pointer full_path
   ]
-  report map [bus_stop(?)] full_path
+  set full_path lput [who] of bs1 full_path
+  report reverse map [bus_stop(?)] full_path
 end
+
 
 ;function which takes in a bus stop id and returns a list corresponding to how many passengers
 ;at the bus stop want to go to each of the 24 destinations
