@@ -44,7 +44,10 @@ to init-buses
   if ticks = 300 or ticks = 350 [ set route_type 1 ]
   set route_path []
   repeat 24 [ set route_path lput [] route_path ]
-  set route_path replace-item 5 route_path [3]
+  set route_path replace-item 9 route_path [8]
+  set route_path replace-item 8 route_path [9 2 6]
+  set route_path replace-item 2 route_path [8]
+  set route_path replace-item 6 route_path [8]
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
   set distances n-values length graph [dijkstra ?] 
@@ -95,7 +98,8 @@ to move-along-route [ dummy_route_path ]
     show word "NEXT STOPS" next_stops
     let max_passengers_waiting -1
     let busiest_stop -1
-    foreach next_stops [
+    if length next_stops > 1 [ set next_stops remove previous_stop next_stops ]
+    foreach next_stops [ 
       let num_passengers_waiting length get-passengers-at-stop ?
       if num_passengers_waiting > max_passengers_waiting [ 
         set max_passengers_waiting num_passengers_waiting
@@ -107,7 +111,7 @@ to move-along-route [ dummy_route_path ]
   
   [
     let shortest_path shortest-path bus_stop current_stop bus_stop one-of stops_involved_in_route
-    show word "SHORTEST PATH: " shortest_path
+    set next_intended_stop item 1 shortest_path
   ]
 end
 
@@ -119,11 +123,21 @@ to drop-off-correct-passengers
     ]
 end
 
+;TO DO: FUNCTION which calculates whether being picked up by a bus will move a passenger closer to its destination
+;INPUT; the bus itself
+;OUTPUT;Boolean value
+to-report benefits-passenger-to-be-on-bus [ bus passenger_destination ]
+  let current_path shortest-path bus_stop current_stop bus_stop passenger_destination
+
+  foreach long_term_path [   
+  ]
+end
+
 to make-new-buses
   if bus_id = 24 [ 
     set route_type 0
       if ticks >= 0 [ 
-        if ticks mod 10 = 0 [ 
+        if ticks mod 100 = 0 [ 
           ifelse ticks = 300 or ticks = 350
           [ repeat 1 [add-bus 3] ]
           [repeat 1 [ add-bus (3) ] ]
@@ -175,7 +189,7 @@ to actions-for-route [bus]
       set long_term_path shortest-path (bus_stop current_stop) (bus_stop majority_destination)
       set long_term_path but-first long_term_path
       if length long_term_path > 0 [ 
-        set next_intended_stop [who] of (item 0 long_term_path)
+        set next_intended_stop (item 0 long_term_path)
       ] 
     ]
     if next_intended_stop = 8 and current_stop = 9 [
@@ -253,7 +267,7 @@ to actions-for-route [bus]
         if has-reached-capacity? self [  
           set long_term_path shortest-path (bus_stop current_stop) (bus_stop 9)
           set long_term_path but-first long_term_path
-          set next_intended_stop [who] of (item 0 long_term_path)
+          set next_intended_stop (item 0 long_term_path)
         ]
       ]
     ]
@@ -261,7 +275,7 @@ to actions-for-route [bus]
     [
       set long_term_path shortest-path (bus_stop current_stop) (bus_stop 9)
       set long_term_path but-first long_term_path
-      set next_intended_stop [who] of (item 0 long_term_path)
+      set next_intended_stop (item 0 long_term_path)
       
       let available_passengers get-passengers-at-stop current_stop
       foreach available_passengers [ 

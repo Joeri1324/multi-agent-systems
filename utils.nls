@@ -28,7 +28,7 @@ to-report shortest-path [bs1 bs2]
     set full_path lput node_pointer full_path
   ]
   set full_path lput [who] of bs1 full_path
-  report reverse map [bus_stop(?)] full_path
+  report reverse full_path
 end
 
 to-report dijkstra [vertexFrom]
@@ -94,4 +94,13 @@ to-report where-are-passengers-on-bus-going [bus]
     set destinations replace-item passenger_destination destinations ((item passenger_destination destinations) + 1)
   ]
   report destinations
+end
+
+;path is represented as a list of bus_stop ids (e.g. [ 3 4 5 16 ])
+to-report length-of-path [ path ]
+  let pairwise_lengths []
+  foreach n-values (length path - 1) [?] [
+    set pairwise_lengths lput (get-distance item ? path item (? + 1) path) pairwise_lengths
+  ]
+  report sum pairwise_lengths
 end
