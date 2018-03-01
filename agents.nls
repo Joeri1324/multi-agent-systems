@@ -60,6 +60,8 @@ to execute-actions
   ;checking if the bus is at a stop
   if current_stop >= 0 [ 
     
+    let beneficial_destinations destinations-that-should-be-on-bus self
+    
     ;dropping off any passengers who want to be at the stop
     drop-off-correct-passengers
     
@@ -73,7 +75,7 @@ to execute-actions
     
     ;dropping off passengers who won't benefit from staying on the bus
     foreach bus_passengers [ 
-      if not benefits-passenger-to-be-on-bus? self item 1 ? [
+      if not member? item 1 ? beneficial_destinations [
         drop-off-passenger item 0 ?
       ]
     ]
@@ -82,7 +84,7 @@ to execute-actions
     let passengers_here get-passengers-at-stop current_stop
     foreach passengers_here [
       if not has-reached-capacity? self [
-        if benefits-passenger-to-be-on-bus? self item 1 ? [
+        if member? item 1 ? beneficial_destinations [
         pick-up-passenger item 0 ?
         ]
       ]
@@ -151,11 +153,30 @@ to-report benefits-passenger-to-be-on-bus? [ bus passenger_destination ]
   report false
 end
 
+to-report destinations-that-should-be-on-bus [ bus ]
+  let destinations_list []
+  foreach n-values 24 [?] [
+    let possible_destination ?
+    let current_distance_from_destination length-of-path (shortest-path bus_stop current_stop bus_stop possible_destination)
+    let is_benefit false
+    foreach long_term_path [
+      let distance_from_destination length-of-path (shortest-path bus_stop ?1 bus_stop possible_destination)
+      if distance_from_destination < current_distance_from_destination [
+        set is_benefit true
+      ]
+    ]  
+    if is_benefit [ 
+      set destinations_list lput ? destinations_list
+    ]
+  ]
+  report destinations_list
+end
+
 to make-new-buses
   if bus_id = 24 [ 
       if ticks >= 0 [ 
-        if ticks mod 100 = 0 [ 
-          add-bus (random 3 + 1)
+        if ticks mod 50 = 0 [ 
+          add-bus (3)
         ]
       ]
   ]
