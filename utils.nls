@@ -18,7 +18,10 @@ end
 ;function which calculates shortest path between two bus stops
 ;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
 to-report shortest-path [bs1 bs2]
-  if bs1 = bs2 [ show "NO NEED TO CALCULATE: THE BUS STOPS ARE THE SAME" ]
+  if bs1 = bs2 [ 
+    let idx [who] of bs1
+    report (list idx)
+  ]
   let backpointers item 0 (item [who] of bs1 distances)
   let node_pointer [who] of bs2
   let full_path []
