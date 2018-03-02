@@ -1,0 +1,103 @@
+__includes["utils.nls"]
+
+buses-own [
+  ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
+  bus_id          ; The ID of a given agent (bus). Each agent has a unique ID.
+  bus_type        ; The type of a given agent (bus). 1 means "small", 2 means "medium" and 3 means "large".
+    
+  ; Dynamic, read-only variables. These values may change over time. You can read them, but you cannot change them.
+  inbox           ; List containing all the incoming messages (a given message is a list like this [tick sender message]).
+  bus_passengers  ; List containing all the passengers that the agent (bus) is currently carrying (represented as a list like this [passenger_id bus_stop]).
+  previous_stop   ; ID of the last bus stop that the agent (bus) visited (-1 means that the agent has not visited any bus stop yet).
+  current_stop    ; ID of the bus stop where the agent (bus) currently is (-1 means that the agent is not at any bus stop).
+  next_stop       ; ID of the bus stop the agent (bus) is traveling to (-1 means that the agent is not travelling to any bus stop).
+
+  ; New local variables for students.
+  ; You can create any new local variable you want. Just declare them here.
+  capacity
+  vote
+  dijkstra_out
+  destination
+  stops
+  upcoming_stop
+  travel_along
+]
+ 
+globals [graph]
+
+to init-buses
+  set capacity int item (bus_type - 1) [12 60 150]
+  ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
+  set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
+   ; Distance array, e.g. "distances 2 7" is the shortest path distance from bus stop 2 to bus stop 7
+  set dijkstra_out n-values length graph [dijkstra ?]
+  set stops []
+  update-route
+  
+end
+
+; Voting by messaging next bus and deciding whether to add a bus and what type
+to vote-new-bus
+  ; TODO
+  print "voting for new bus needed"
+end 
+
+; Returns an array for the next bus stop in which each destination is flagged as better/closer (1) or worse (0)
+to-report next-stop-better [current_bs next_bs]
+  let current_distances n-values length graph [distance-from-to current_bs ?]
+  let next_distances n-values length graph [distance-from-to next_bs ?]
+  report (map [?1 - ?2 > 0] current_distances next_distances)
+end
+
+to-report distance-from-to [bs1 bs2]
+  report array:item (item 1 (item bs1 dijkstra_out)) bs2
+end
+
+to update-route
+  ifelse length stops > 0 [
+    set stops (remove (first stops) stops)
+    set upcoming_stop first stops
+  ]
+  [ 
+    set destination random 24
+    set stops shortest-path bus_stop current_stop bus_stop destination
+    set upcoming_stop first stops
+  ]
+  type "Stop coming up is: " print upcoming_stop
+end
+ 
+to execute-actions
+  
+  ; Check if at bus stop
+  let at_bus_stop current_stop != -1
+  
+  ; Cast vote deciding for a new bus every n ticks
+  let n 10
+  if ((remainder ticks n) = 0) [
+    vote-new-bus
+  ]
+  
+  if at_bus_stop [
+    type "now at bus stop: " print current_stop
+    update-route
+    
+    ; Get distance info of who to pick up and drop off
+    set travel_along next-stop-better current_stop upcoming_stop
+    
+    ; Get passengers at bus stop + inside bus
+    let passengers_total sentence get-passengers-at-stop current_stop bus_passengers
+    type "accumulated_passengers: " print length passengers_total
+    
+    ; pick and drop off passengers at bus stop
+    foreach passengers_total [
+      let passenger_destination item 1 ?
+      ifelse (item passenger_destination travel_along) 
+        [pick-up-passenger ?]
+        [drop-off-passenger ?]
+    ]
+  ] 
+  
+  ; travel to next stop along the route
+  travel-to upcoming_stop
+  
+end
