@@ -91,6 +91,15 @@ to execute-actions
     ; Get distance info of who to pick up and drop off
     set travel_along next-stop-better current_stop upcoming_stop
     
+    ; Drop off traveling passengers
+    foreach bus_passengers [
+      let passenger_destination item 1 ?
+      if not (item passenger_destination travel_along)[
+        drop-off-passenger item 0 ?
+        ;type "dropping off passenger: " print ?
+      ]
+    ]
+    
     ; Pick up waiting passengers
     foreach get-passengers-at-stop current_stop [
       let passenger_destination item 1 ?
@@ -100,14 +109,7 @@ to execute-actions
       ]
     ]
     
-    ; Drop off traveling passengers
-    foreach bus_passengers [
-      let passenger_destination item 1 ?
-      if not (item passenger_destination travel_along)[
-        drop-off-passenger item 0 ?
-        ;type "dropping off passenger: " print ?
-      ]
-    ]
+
   ] 
   
   ; travel to next stop along the route
