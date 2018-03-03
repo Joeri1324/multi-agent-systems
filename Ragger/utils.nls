@@ -19,18 +19,18 @@
 ;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
 to-report shortest-path [bs1 bs2]
   if bs1 = bs2 [ 
-    let idx [who] of bs1
+    let idx bs1
     report (list idx)
   ]
-  let backpointers item 0 (item [who] of bs1 dijkstra_out)
-  let node_pointer [who] of bs2
+  let backpointers item 0 (item bs1 dijkstra_out)
+  let node_pointer bs2
   let full_path []
-  set full_path lput [who] of bs2 full_path
-  while [array:item backpointers node_pointer != [who] of bs1] [
+  set full_path lput bs2 full_path
+  while [array:item backpointers node_pointer != bs1] [
     set node_pointer (array:item backpointers node_pointer)
     set full_path lput node_pointer full_path
   ]
-  set full_path lput [who] of bs1 full_path
+  set full_path lput bs1 full_path
   report reverse full_path
 end
 
@@ -47,15 +47,14 @@ to-report dijkstra [vertexFrom]
     ; let l filter [not member? ? S] Q
     ; print l
     let v one-of Q
-    
     foreach Q [ ; find lowest distance which is not visited yet
       if array:item dist ? < array:item dist v [
          set v ?
       ]
     ]
     set Q remove v Q
-    ; set S lput v S ; add u to visited nodes
     
+    ; set S lput v S ; add u to visited nodes
     let adjacent item v graph
     foreach adjacent [
       if (array:item dist v + get-distance ? v) < array:item dist ? [

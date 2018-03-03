@@ -1,4 +1,5 @@
 __includes["utils.nls"]
+extensions [array table]
 
 buses-own [
   ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
@@ -66,11 +67,13 @@ to update-route
     set upcoming_stop first stops
   ]
   [ 
-    set destination random 24
-    set stops shortest-path bus_stop current_stop bus_stop destination
+    set destination random length graph
+    type [who] of self type " arrived at destination: " print current_stop
+    type [who] of self type " picking new destination: " print destination
+    set stops shortest-path current_stop destination
+    print "bananas"
     set upcoming_stop first stops
   ]
-  ;type "Stop coming up is: " print upcoming_stop
 end
  
 to execute-actions
@@ -113,6 +116,7 @@ to execute-actions
   ] 
   
   ; travel to next stop along the route
+  type "Stop coming up is: " print upcoming_stop
   travel-to upcoming_stop
   
 end
