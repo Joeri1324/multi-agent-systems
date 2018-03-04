@@ -16,12 +16,9 @@ buses-own [
   ; New local variables for students.
   ; You can create any new local variable you want. Just declare them here.
   capacity
-  vote
   added_bus
-  instructions_given
   dijkstra_out
-  destination
-  stops
+  start
   upcoming_stop
   travel_along
   max_buses
@@ -35,7 +32,6 @@ to init-buses
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
    ; Distance array, e.g. "distances 2 7" is the shortest path distance from bus stop 2 to bus stop 7
   set dijkstra_out n-values length graph [dijkstra ?]
-  set stops [0]
   set added_bus 0
   set max_buses 12  
 end
@@ -49,11 +45,45 @@ to make-new-bus
   ]
 end
 
-; Returns an array for the next bus stop in which each destination is flagged as better/closer (1) or worse (0)
-to-report next-stop-better [current_bs next_bs]
+; Returns an array for adjacent stops in which each destination is flagged as better/closer (1) or worse (0)
+to-report which-stop-better [current_bs]
   let current_distances n-values length graph [distance-from-to current_bs ?]
-  let next_distances n-values length graph [distance-from-to next_bs ?]
-  report (map [?1 - ?2 > 0] current_distances next_distances)
+  let next_flags []
+  foreach item current_stop graph[
+    let distances distance-for-destinations ?
+    let flags (map [?1 - ?2 > 0] current_distances distances)
+    set next_flags lput flags next_flags
+  ]
+  report next_flags
+end
+
+; Let passengers vote which next stop to go to  
+to-report vote-next-stop [current_bs people next_flags] 
+  let best_stop -1
+  let best_vote -1
+  foreach n-values length next_flags [?] [
+    let vote people-vote people item ? next_flags
+    if vote > best_vote [
+      set best_vote vote
+      set best_stop ?
+    ]
+  ]
+  report item best_stop (item current_bs graph)      
+end
+
+; Function to avoid double foreach loop in vote-next-stop 
+to-report people-vote [people stop_flags]
+  let total_votes 0
+  foreach people [
+    print people
+    set total_votes (total_votes + (item (item 1 ?) stop_flags))
+  ]
+  report total_votes      
+end
+
+  
+to-report distance-for-destinations [bs]
+  report n-values length graph [distance-from-to bs ?]  
 end
 
 ; Returns the distance precalculated with Dijkstra's algorithm
@@ -61,26 +91,12 @@ to-report distance-from-to [bs1 bs2]
     report array:item (item 1 (item bs1 dijkstra_out)) bs2
 end
 
-; Get a new destination (there can be multiple tactics to choose this)
-to get-new-destination
-  set destination random length graph
-end
-
 ; Update route (called when arrived at a bus stop)
 to update-route
-  set stops (remove (first stops) stops)
-  ifelse length stops > 0 [  ; not at destination
-    set upcoming_stop first stops
-  ]
-  [ 
-    get-new-destination
-    while [destination = current_stop] [
-      get-new-destination  
-    ]
-    let path shortest-path current_stop destination
-    set stops remove first path path
-    set upcoming_stop first stops
-  ]
+  let passengers_total sentence get-passengers-at-stop current_stop bus_passengers
+  let next_flags which-stop-better current_stop
+  set upcoming_stop vote-next-stop current_stop passengers_total next_flags
+  set travel_along item (position upcoming_stop (item current_stop graph)) next_flags
 end
  
 to execute-actions
@@ -91,10 +107,8 @@ to execute-actions
   let at_bus_stop current_stop != -1
   
   if at_bus_stop [
-    update-route
     
-    ; Get distance info of who to pick up and drop off
-    set travel_along next-stop-better current_stop upcoming_stop
+    update-route
     
     ; Drop off traveling passengers
     foreach bus_passengers [
