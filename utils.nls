@@ -90,3 +90,43 @@ to-report length-of-path [ path ]
   ]
   report sum pairwise_lengths
 end
+
+;__________________________________________________________-
+;utils from Joeri's branch
+
+to-report get-destination [passenger]
+  report item 1 passenger
+end
+
+to-report argmax [l]
+  report reduce [ifelse-value (item ?1 l > item ?2 l) [?1] [?2]] n-values length graph [?]
+end
+
+to-report bincount-destinations [destinations]
+  let counts n-values length graph [0]
+  foreach destinations [
+    set counts replace-item ? counts ((item ? counts) + 1)
+  ]
+  report counts
+end 
+
+to-report get-destination-most-passenger
+  let counts bincount-destinations reduce sentence n-values length graph [map get-destination get-passengers-at-stop ?]
+  ; set already desired stop to zero
+  foreach filter [? != -1] get-all-desires [set counts replace-item ? counts 0]
+  report argmax counts
+end
+
+to-report get-stops-waiting-passenger-who-want-to-go-to [bus_stop]
+  report filter [? != -1 ] map [ifelse-value member? bus_stop (map get-destination get-passengers-at-stop ?) [?] [-1]] n-values length graph [?]
+  ; report n-values length graph [map [ifelse-value (get-destination ? = bus_stop) [?1] [0]] get-passengers-at-stop ?1]
+end
+
+; this should be done by messages
+to-report get-all-desires
+  let desires []
+  ask buses [
+    set desires lput desire desires
+  ]
+  report desires
+end
