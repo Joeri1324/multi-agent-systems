@@ -21,6 +21,7 @@ buses-own [
   long_term_path ; List containing the route the bus is taking for the next few moves
   beneficial_destinations ;
   next_intended_stop ; a next_stop style variable that we are allowed to modify
+  bus_size;
 
   distances ;  
   beliefs;
@@ -37,6 +38,7 @@ globals [graph]
 
 to init-buses
   ; Initialize your agents here.
+  set bus_size int item (bus_type - 1) [12 60 150]
   set long_term_path []
   set next_intended_stop 9
   set score 0
@@ -82,11 +84,11 @@ to execute-actions
         drop-off-passenger item 0 ?
       ]
     ]
-    
+  
     ;picking up passengers who would benefit from getting on the bus
     let passengers_here get-passengers-at-stop current_stop
     foreach passengers_here [
-      if not has-reached-capacity? self [
+      if length bus_passengers != bus_size [
         if member? item 1 ? beneficial_destinations [
         pick-up-passenger item 0 ?
         ]

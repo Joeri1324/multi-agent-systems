@@ -31,7 +31,6 @@ to init-buses
   set desire -1
   set intention -1
   
-  foreach n-values 23 [?] [add-bus 1]
 end
 
 to-report get-destination [passenger]
@@ -146,7 +145,7 @@ to travel
   ]
 end
 
-to maby-remove-node-from-path
+to remove-current-stop-from-path
   if current_stop = item 0 long_term_route [
     set long_term_route remove-item 0 long_term_route
   ]
@@ -160,18 +159,27 @@ to pick-up-passengers
   ]
 end
 
-to drop-of-passengers 
+to drop-off-passengers 
   foreach bus_passengers [
     if current_stop = get-destination ? [
       drop-off-passenger item 0 ?
     ]
   ]
 end
- 
+
+to make-new-buses
+  if bus_id = 24 [ 
+      if ticks >= 10 and ticks <= 15 [ 
+        ifelse ticks >= 10 and ticks <= 13 [ add-bus 3 ] [ add-bus 2 ]
+      ]
+  ]
+end
+
 to execute-actions
+  make-new-buses
   navigate
   travel
   pick-up-passengers
-  drop-of-passengers
-  maby-remove-node-from-path
+  drop-off-passengers
+  remove-current-stop-from-path
 end

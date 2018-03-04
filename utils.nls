@@ -1,22 +1,5 @@
 ;THIS IS A FILE WHERE WE STORE UTILS
 
-;returns true if the bus has reached capacity, false otherwise
-to-report has-reached-capacity? [bus]
-  let truth_value false
-  let capacity 0
-  if bus_type = 1 [set capacity 12]
-  if bus_type = 2 [set capacity 60]
-  if bus_type = 3 [set capacity 150]
-  if length bus_passengers = capacity [ 
-    set truth_value true
-    ]
-  report truth_value
-end
-
-;function which calculates shortest path between two bus stops
-;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
-;function which calculates shortest path between two bus stops
-;IMPLEMENTATION of LRTA* (from section 2.1 of shoham and leyton-brown)
 to-report shortest-path [bs1 bs2]
   if bs1 = bs2 [ 
     let idx [who] of bs1
