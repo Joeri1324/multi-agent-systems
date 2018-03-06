@@ -16,8 +16,6 @@ buses-own [
   ; New local variables for students.
   ; You can create any new local variable you want. Just declare them here.
 
-  possible_next_stops ; List containing all possible next stops (i.e. list of bus_stop turtles) from the current_stop (if current stop is -1,
-                      ; possible_next_stops will be applied to the previous stop
   long_term_path ; List containing the route the bus is taking for the next few moves
   beneficial_destinations ;
   next_intended_stop ; a next_stop style variable that we are allowed to modify
@@ -48,13 +46,14 @@ to init-buses
   set score 0
   set num_passengers_picked_up 0
   
-  ifelse ticks = 100 or ticks = 101 or ticks = 102 or ticks = 103 or ticks = 104 [ set mode 0 ][ set mode 1 ]
+  ifelse ticks >= 100 and ticks <= 105 [ set mode 0 ][ set mode 1 ]
   ifelse mode = 1 [ set intention "free movement" ][ set intention "routed" ]
   if ticks = 100 [ set route_type 0 ]
   if ticks = 101 [ set route_type 1 ]
   if ticks = 102 [ set route_type 2 ]
   if ticks = 103 [ set route_type 3 ]
   if ticks = 104 [ set route_type 4 ]
+  if ticks = 105 [ set route_type 5 ]
   set route_path making-route
   
   
@@ -68,7 +67,7 @@ to execute-actions
   make-new-buses
   
   ;sending message if there is a chokepoint in the system
-  send-message-as-boss
+  ;send-message-as-boss
   
   ;checking if the bus is at a stop
   if current_stop >= 0 [ 
@@ -83,7 +82,7 @@ to execute-actions
     ;"free mode" buses fix their next stop in this way
     if mode = 1 and intention != "following orders" [ 
       spillover-actions self
-      act-on-message-from-boss
+      ;act-on-message-from-boss
     ]
     
     ;acting on a message received from the boss (meaning the free mode buses will move to a chokepoint)
@@ -119,11 +118,6 @@ to execute-actions
         ]
       ]
     ]
-  ]
-
-  ;sending messages to the "messenger" bus
-  if bus_id != 24 and ticks mod 15 = 0 and mode = 1 [ 
-  send-message 24 next_intended_stop
   ]
   
   ;travelling to the next stop
@@ -195,8 +189,8 @@ end
 
 to make-new-buses
   if bus_id = 24 [ 
-      if ticks >= 100 and ticks <= 120 [ 
-        ifelse ticks >= 100 and ticks <= 104 [ add-bus 3 ] [ add-bus 2 ]
+      if ticks >= 100 and ticks <= 130 [ 
+        ifelse ticks >= 100 and ticks <= 104 [ repeat 2 [ add-bus 3 ] ] [ add-bus 3 ]
       ]
   ]
 end
@@ -207,12 +201,19 @@ end
 
 to spillover-actions [bus]
     ;getting a list of the possible next stops
-    set possible_next_stops (sort [link-neighbors] of bus_stop current_stop)
+    let possible_next_stops item current_stop graph
       
-    ;picking one of these at random  
-    let random_index random length possible_next_stops
-    let selected_stop (item random_index possible_next_stops)
-    set next_intended_stop ([who] of selected_stop)
+    ;going to the stop with the most people waiting
+    let max_people_waiting -1
+    let busiest_next_stop -1  
+    foreach possible_next_stops [
+      let num_people_waiting length get-passengers-at-stop ?
+      if num_people_waiting > max_people_waiting [
+        set max_people_waiting num_people_waiting
+        set busiest_next_stop ?
+      ]
+    ]
+    set next_intended_stop busiest_next_stop
     
     ;choosing the path based on where the passengers want to go
     let passenger_wishes where-are-passengers-on-bus-going self
@@ -247,16 +248,16 @@ to-report making-route
     set route_path [[] [] [] [] [] [] [] [] [] [] [17 21] [17] [15 22] [10 22] [] [12 18] [] [10 11] [15] [] [] [10 22] [12 21] []]
   ]
   if route_type = 2 [
-    set route_path [[] [] [] [4] [3 10] [] [] [] [] [] [4 13] [] [] [10 23] [] [] [] [] [] [23] [] [] [] [13 19]]
+    set route_path [[14 22] [] [] [4] [3 10] [] [] [] [] [3 20] [4 13] [] [] [10 23] [0 23] [] [] [] [] [] [9 21] [20 22] [0 21] [13 14]]
   ]
   if route_type = 3 [
-    set route_path [[14 22] [] [] [9] [] [] [] [] [] [3 20] [] [] [] [] [0 23] [] [] [] [] [] [9 21] [20 22] [0 21] [14]]
+    set route_path [[14 22] [] [] [9] [3 10] [] [] [] [] [3 20] [4 13] [] [] [10 23] [0 23] [] [] [] [] [] [9 21] [20 22] [0 21] [13 14]]
   ]
   if route_type = 4 [
-    set route_path [[] [] [] [] [] [] [] [] [] [] [13 17] [17] [15 22] [10 22] [] [12 18] [] [10 11] [15] [] [] [] [12 13] []]
+    set route_path [[] [] [] [] [] [] [] [13 17] [] [] [] [17] [15 22] [7 22] [] [12 18] [] [7 11] [15] [] [] [] [12 13] []]
   ]
   if route_type = 5 [
-    set route_path [[] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] [] []]
+    set route_path [[] [7 19] [] [4] [3 5] [4 17] [] [1 17] [] [] [] [] [] [] [] [] [] [5 7] [] [1] [] [] [] []]
   ]
   report route_path
 end
@@ -287,7 +288,7 @@ to send-message-as-boss
         set max_amount_of_passengers item 1 ?
       ]
     ]
-    if max_amount_of_passengers >= ceiling (0.3 * total_number_of_passengers) [
+    if max_amount_of_passengers >= ceiling (0.3 * total_number_of_passengers) and total_number_of_passengers > 100 [
       if length sort buses with [ mode = 1 and bus_id != 24 and intention = "free movement"] > 0 [
         repeat 2 [ send-message [who] of one-of buses with [ mode = 1 and bus_id != 24 and intention = "free movement"] stop_with_most_passengers ]
       ]
