@@ -16,10 +16,13 @@ buses-own [
   ; New local variables for students.
   ; You can create any new local variable you want. Just declare them here.
   capacity
+  vote
   added_bus
+  instructions_given
   dijkstra_out
+  destination
+  stops
   upcoming_stop
-  flags
   travel_along
   max_buses
 ]
@@ -30,12 +33,56 @@ to init-buses
   set capacity int item (bus_type - 1) [12 60 150]
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
+   ; Distance array, e.g. "distances 2 7" is the shortest path distance from bus stop 2 to bus stop 7
   set dijkstra_out n-values length graph [dijkstra ?]
-  set flags n-values length graph [which-stop-better ?]
+  set stops [0]
   set added_bus 0
   set max_buses 12  
 end
 
+
+; Create new bus
+to make-new-bus
+  if count buses < max_buses and added_bus = 0 [
+    add-bus 2
+    set added_bus 1
+  ]
+end
+
+; Returns an array for the next bus stop in which each destination is flagged as better/closer (1) or worse (0)
+to-report next-stop-better [current_bs next_bs]
+  let current_distances n-values length graph [distance-from-to current_bs ?]
+  let next_distances n-values length graph [distance-from-to next_bs ?]
+  report (map [?1 - ?2 > 0] current_distances next_distances)
+end
+
+; Returns the distance precalculated with Dijkstra's algorithm
+to-report distance-from-to [bs1 bs2]
+    report array:item (item 1 (item bs1 dijkstra_out)) bs2
+end
+
+; Get a new destination (there can be multiple tactics to choose this)
+to get-new-destination
+  set destination random length graph
+end
+
+; Update route (called when arrived at a bus stop)
+to update-route
+  set stops (remove (first stops) stops)
+  ifelse length stops > 0 [  ; not at destination
+    set upcoming_stop first stops
+  ]
+  [ 
+    get-new-destination
+    while [destination = current_stop] [
+      get-new-destination  
+    ]
+    let path shortest-path current_stop destination
+    set stops remove first path path
+    set upcoming_stop first stops
+  ]
+end
+ 
 to execute-actions
   
   make-new-bus
@@ -44,14 +91,10 @@ to execute-actions
   let at_bus_stop current_stop != -1
   
   if at_bus_stop [
+    update-route
     
-    let passengers_total sentence get-passengers-at-stop current_stop bus_passengers
-    
-    ifelse length passengers_total = 0 [
-      find-passengers ;
-    ][
-      listen-to-passengers passengers_total
-    ]
+    ; Get distance info of who to pick up and drop off
+    set travel_along next-stop-better current_stop upcoming_stop
     
     ; Drop off traveling passengers
     foreach bus_passengers [
@@ -74,76 +117,3 @@ to execute-actions
   travel-to upcoming_stop
   
 end
-
-; Create new buss
-to make-new-bus
-  if count buses < max_buses and added_bus = 0 [
-    add-bus 2
-    set added_bus 1
-  ]
-end
-
-; Reports a list containing a list for each adjacent stop in which each destination is flagged as better/closer "true" or worse "false"
-to-report which-stop-better [bs]
-  let current_distances n-values length graph [distance-from-to bs ?]
-  let next_flags []
-  foreach item bs graph[
-    let distances distance-to-destinations ?
-    let bs_flags (map [?1 - ?2 > 0] current_distances distances)
-    set next_flags lput bs_flags next_flags
-  ]
-  report next_flags
-end
-
-; Let passengers vote which next stop to go to
-; Reports the number of the next stop with the highest passenger vote  
-to-report vote-next-stop [current_bs people next_flags]
-  let winning_stop -1
-  let highest_vote -1
-  foreach n-values length next_flags [?] [
-    let vote count-votes people item ? next_flags
-    if vote > highest_vote [
-      set highest_vote vote
-      set winning_stop ?
-    ]
-  ]  
-  report item winning_stop (item current_bs graph)      
-end
-
-; Reports the vote count for one destination 
-to-report count-votes [people stop_flags]
-  let total_votes 0
-  foreach people [
-    let vote 0
-    if (item (item 1 ?) stop_flags) [set vote 1]
-    set total_votes (total_votes + vote)
-  ]
-  report total_votes      
-end
-
-; Function that is called instead of listening to the passengers
-; Randomly drives to one of the next stops to look for passengers
-; (this function should be improved to go in the direction of crowded stops)
-to find-passengers
-  set upcoming_stop one-of item current_stop graph
-end
-
-; Reports the distances from a given bus stop to all possible destinations  
-to-report distance-to-destinations [bs]
-  report n-values length graph [distance-from-to bs ?]  
-end
-
-; Reports the distance between two stops precalculated with Dijkstra's algorithm
-to-report distance-from-to [bs1 bs2]
-    report array:item (item 1 (item bs1 dijkstra_out)) bs2
-end
-
-; Function that will decide the next stop based on passenger votes (called when arrived at a bus stop)
-to listen-to-passengers [people]
-  let next_flags item current_stop flags
-  set upcoming_stop vote-next-stop current_stop people next_flags
-  set travel_along item (position upcoming_stop (item current_stop graph)) next_flags
-end
-
-
-
