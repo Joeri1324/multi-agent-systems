@@ -40,13 +40,14 @@ to init-buses
   ; Initialize your agents here.
   set bus_size int item (bus_type - 1) [12 60 150]
   set long_term_path []
-  set next_intended_stop 9
+  set next_intended_stop -1
+  set beneficial_destinations []
   
   set num_passengers_dropped_off 0
   set score 0
   set num_passengers_picked_up 0
   
-  ifelse ticks >= 100 and ticks <= 105 [ set mode 0 ][ set mode 1 ]
+  ifelse ticks >= 100 and ticks <= 108 [ set mode 0 ][ set mode 1 ]
   ifelse mode = 1 [ set intention "free movement" ][ set intention "routed" ]
   if ticks = 100 [ set route_type 0 ]
   if ticks = 101 [ set route_type 1 ]
@@ -54,6 +55,9 @@ to init-buses
   if ticks = 103 [ set route_type 3 ]
   if ticks = 104 [ set route_type 4 ]
   if ticks = 105 [ set route_type 5 ]
+  if ticks = 106 [ set route_type 6 ]
+  if ticks = 107 [ set route_type 7 ]
+  if ticks = 108 [ set route_type 0 ]
   set route_path making-route
   
   
@@ -73,6 +77,15 @@ to execute-actions
   if current_stop >= 0 [ 
     ;dropping off any passengers who want to be at the stop
     drop-off-correct-passengers
+    
+    let passengers_here get-passengers-at-stop current_stop
+    if next_intended_stop = -1 [
+      foreach passengers_here [
+        if length bus_passengers != bus_size [
+          pick-up-passenger item 0 ?
+        ]
+      ]
+    ]
     
     ;routed buses fix their next stop in this way
     if mode = 0 [
@@ -97,8 +110,10 @@ to execute-actions
       ]
     ]
     
-    ;calculating based on where the bus is going next
-    set beneficial_destinations destinations-that-should-be-on-bus self
+    if next_intended_stop != -1 [
+      ;calculating based on where the bus is going next
+      set beneficial_destinations destinations-that-should-be-on-bus self
+    ]
     
     ;dropping off passengers who won't benefit from staying on the bus
     foreach bus_passengers [ 
@@ -109,7 +124,7 @@ to execute-actions
     ]
   
     ;picking up passengers who would benefit from getting on the bus
-    let passengers_here get-passengers-at-stop current_stop
+    set passengers_here get-passengers-at-stop current_stop
     foreach passengers_here [
       if length bus_passengers != bus_size [
         if member? item 1 ? beneficial_destinations [
@@ -120,8 +135,11 @@ to execute-actions
     ]
   ]
   
+  if next_intended_stop != -1
+  [
   ;travelling to the next stop
-  travel-to next_intended_stop         
+  travel-to next_intended_stop
+  ]         
 end
 
 ;_________________________________________________________________________________________________
@@ -190,7 +208,7 @@ end
 to make-new-buses
   if bus_id = 24 [ 
       if ticks >= 100 and ticks <= 130 [ 
-        ifelse ticks >= 100 and ticks <= 104 [ repeat 2 [ add-bus 3 ] ] [ add-bus 3 ]
+        ifelse ticks >= 100 and ticks <= 108 [ add-bus 3 ] [ add-bus 3 ]
       ]
   ]
 end
@@ -213,7 +231,29 @@ to spillover-actions [bus]
         set busiest_next_stop ?
       ]
     ]
-    set next_intended_stop busiest_next_stop
+    ifelse max_people_waiting = 0 [ 
+      let busiest_stop_in_system -1
+      let num_passengers_waiting_at_busiest_stop_in_system -1
+      foreach n-values 24 [?] [
+        let num_passengers_here length get-passengers-at-stop ?
+        if num_passengers_here > num_passengers_waiting_at_busiest_stop_in_system [
+          set busiest_stop_in_system ?
+          set num_passengers_waiting_at_busiest_stop_in_system num_passengers_here
+        ]
+      ]
+      ifelse busiest_stop_in_system = current_stop or num_passengers_waiting_at_busiest_stop_in_system < 10
+      [ 
+        set next_intended_stop -1
+      ]
+      [ 
+        show word "HEADING TO CHOKE POINT at time: " ticks
+        set long_term_path shortest-path bus_stop current_stop bus_stop busiest_stop_in_system
+        set next_intended_stop item 1 long_term_path
+      ]
+    ]
+    [ 
+      set next_intended_stop busiest_next_stop
+    ]
     
     ;choosing the path based on where the passengers want to go
     let passenger_wishes where-are-passengers-on-bus-going self
@@ -242,7 +282,7 @@ to-report making-route
   repeat 24 [ set route_path lput [] route_path ]
   
   if route_type = 0 [
-    set route_path [[] [] [8] [] [] [] [8] [] [9 2 6] [8] [] [] [] [] [] [] [] [] [] [] [] [] [] []]
+    set route_path [[] [] [8] [9] [] [] [8] [] [9 2 6] [3 8] [] [] [] [] [] [] [] [] [] [] [] [] [] []]
   ]
   if route_type = 1 [
     set route_path [[] [] [] [] [] [] [] [] [] [] [17 21] [17] [15 22] [10 22] [] [12 18] [] [10 11] [15] [] [] [10 22] [12 21] []]
@@ -258,6 +298,12 @@ to-report making-route
   ]
   if route_type = 5 [
     set route_path [[] [7 19] [] [4] [3 5] [4 17] [] [1 17] [] [] [] [] [] [] [] [] [] [5 7] [] [1] [] [] [] []]
+  ]
+  if route_type = 6 [
+    set route_path [[] [] [] [] [] [] [] [] [] [] [] [] [15 20] [] [] [12 18] [] [] [15] [] [12] [] [] []]
+  ]
+  if route_type = 7 [
+    set route_path [[] [] [] [16] [3] [4] [] [] [] [] [] [] [] [] [] [] [5] [] [] [] [] [] [] []]
   ]
   report route_path
 end
