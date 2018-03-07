@@ -154,6 +154,7 @@ to move-along-route [ dummy_route_path ]
       set stops_involved_in_route lput ? stops_involved_in_route
     ]
   ]
+  
   ifelse member? current_stop stops_involved_in_route [
     let next_stops item current_stop dummy_route_path
     let max_passengers_waiting -1
@@ -168,6 +169,19 @@ to move-along-route [ dummy_route_path ]
     ]
     set next_intended_stop busiest_stop
     set long_term_path (list next_intended_stop)
+    
+    let busiest_stop_on_route -1
+    let num_passengers_waiting_at_busiest_stop_on_route -1
+    foreach stops_involved_in_route [
+      let num_passengers_at_stop length get-passengers-at-stop ?
+      if num_passengers_at_stop > num_passengers_waiting_at_busiest_stop_on_route [
+        set busiest_stop_on_route ?
+        set num_passengers_waiting_at_busiest_stop_on_route num_passengers_at_stop
+      ]
+    ]
+    if num_passengers_waiting_at_busiest_stop_on_route = 0 and length bus_passengers = 0 [
+      set next_intended_stop -1
+    ]
   ]  
   [
     set long_term_path shortest-path bus_stop current_stop bus_stop one-of stops_involved_in_route
@@ -208,7 +222,7 @@ end
 to make-new-buses
   if bus_id = 24 [ 
       if ticks >= 100 and ticks <= 130 [ 
-        ifelse ticks >= 100 and ticks <= 108 [ add-bus 3 ] [ add-bus 3 ]
+        ifelse ticks >= 100 and ticks <= 108 [ add-bus 3 ] [ add-bus 2 ]
       ]
   ]
 end
