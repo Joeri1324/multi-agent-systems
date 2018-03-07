@@ -46,18 +46,19 @@ to init-buses
   set num_passengers_dropped_off 0
   set score 0
   set num_passengers_picked_up 0
+  set mode 1
   
-  ifelse ticks >= 100 and ticks <= 108 [ set mode 0 ][ set mode 1 ]
+  ifelse ticks >= 2 and ticks <= 10 [ set mode 0 ][ set mode 1 ]
   ifelse mode = 1 [ set intention "free movement" ][ set intention "routed" ]
-  if ticks = 100 [ set route_type 0 ]
-  if ticks = 101 [ set route_type 1 ]
-  if ticks = 102 [ set route_type 2 ]
-  if ticks = 103 [ set route_type 3 ]
-  if ticks = 104 [ set route_type 4 ]
-  if ticks = 105 [ set route_type 5 ]
-  if ticks = 106 [ set route_type 6 ]
-  if ticks = 107 [ set route_type 7 ]
-  if ticks = 108 [ set route_type 0 ]
+  if ticks = 2 [ set route_type 0 ]
+  if ticks = 3 [ set route_type 1 ]
+  if ticks = 4 [ set route_type 2 ]
+  if ticks = 5 [ set route_type 3 ]
+  if ticks = 6 [ set route_type 4 ]
+  if ticks = 7 [ set route_type 5 ]
+  if ticks = 8 [ set route_type 6 ]
+  if ticks = 9 [ set route_type 7 ]
+  if ticks = 10 [ set route_type 0 ]
   set route_path making-route
   
   
@@ -79,7 +80,7 @@ to execute-actions
     drop-off-correct-passengers
     
     let passengers_here get-passengers-at-stop current_stop
-    if next_intended_stop = -1 [
+    if next_intended_stop = -1 or length bus_passengers = 0 [
       foreach passengers_here [
         if length bus_passengers != bus_size [
           pick-up-passenger item 0 ?
@@ -221,8 +222,8 @@ end
 
 to make-new-buses
   if bus_id = 24 [ 
-      if ticks >= 100 and ticks <= 130 [ 
-        ifelse ticks >= 100 and ticks <= 108 [ add-bus 3 ] [ add-bus 2 ]
+      if ticks <= 40 [ 
+        ifelse ticks >= 2 and ticks <= 10 [ add-bus 3 ] [ add-bus 2 ]
       ]
   ]
 end
@@ -245,7 +246,7 @@ to spillover-actions [bus]
         set busiest_next_stop ?
       ]
     ]
-    ifelse max_people_waiting = 0 [ 
+    ifelse max_people_waiting = 0 and length bus_passengers = 0 [ 
       let busiest_stop_in_system -1
       let num_passengers_waiting_at_busiest_stop_in_system -1
       foreach n-values 24 [?] [
@@ -255,12 +256,11 @@ to spillover-actions [bus]
           set num_passengers_waiting_at_busiest_stop_in_system num_passengers_here
         ]
       ]
-      ifelse busiest_stop_in_system = current_stop or num_passengers_waiting_at_busiest_stop_in_system < 10
+      ifelse busiest_stop_in_system = current_stop or num_passengers_waiting_at_busiest_stop_in_system < 20
       [ 
         set next_intended_stop -1
       ]
       [ 
-        show word "HEADING TO CHOKE POINT at time: " ticks
         set long_term_path shortest-path bus_stop current_stop bus_stop busiest_stop_in_system
         set next_intended_stop item 1 long_term_path
       ]
