@@ -1,4 +1,5 @@
 __includes [ "utils.nls" ]
+extensions [array]
 
 buses-own [
   ; Static, read-only variables. These values never change. You can read them, but you cannot change them.
