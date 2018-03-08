@@ -16,85 +16,131 @@ buses-own [
   ; New local variables for students.
   ; You can create any new local variable you want. Just declare them here.
 
-  possible_next_stops ; List containing all possible next stops (i.e. list of bus_stop turtles) from the current_stop (if current stop is -1,
-                      ; possible_next_stops will be applied to the previous stop
   long_term_path ; List containing the route the bus is taking for the next few moves
+  beneficial_destinations ;
   next_intended_stop ; a next_stop style variable that we are allowed to modify
+  bus_size;
 
   distances ;  
-  beliefs;
-  desires;
-  intentions;
+  belief; array which indexes
+  desire;
+  intention;
   
-  route_path;
-  mode;
-  score; number of passengers the bus has dropped off at their final destination (or something like this)
+  route_type; indexes which route (not strictly needed, but often easier than writing out the full route)
+  route_path; if on route, specific route it follows
+  mode; indexes whether on route or on free travel mode
+  score; number of passengers the bus has dropped off at their final destination
+  num_passengers_dropped_off; number of passengers dropped off in total
+  num_passengers_picked_up; number of passengers picked up in total
 ]
  
 globals [graph]
 
 to init-buses
   ; Initialize your agents here.
+  set bus_size int item (bus_type - 1) [12 60 150]
   set long_term_path []
-  set next_intended_stop 9
+  set next_intended_stop -1
+  set beneficial_destinations []
+  
+  set num_passengers_dropped_off 0
   set score 0
-  set mode random 2
-  set route_path []
-  repeat 24 [ set route_path lput [] route_path ]
-  set route_path replace-item 9 route_path [8]
-  set route_path replace-item 8 route_path [9 2 6]
-  set route_path replace-item 2 route_path [8]
-  set route_path replace-item 6 route_path [8]
+  set num_passengers_picked_up 0
+  set mode 1
+  
+  ifelse ticks >= 2 and ticks <= 10 [ set mode 0 ][ set mode 1 ]
+  ifelse mode = 1 [ set intention "free movement" ][ set intention "routed" ]
+  if ticks = 2 [ set route_type 0 ]
+  if ticks = 3 [ set route_type 1 ]
+  if ticks = 4 [ set route_type 2 ]
+  if ticks = 5 [ set route_type 3 ]
+  if ticks = 6 [ set route_type 4 ]
+  if ticks = 7 [ set route_type 5 ]
+  if ticks = 8 [ set route_type 6 ]
+  if ticks = 9 [ set route_type 7 ]
+  if ticks = 10 [ set route_type 0 ]
+  set route_path making-route
+  
+  
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
   set distances n-values length graph [dijkstra ?] 
 end
 
-to execute-actions
-  ; Add decision making strategies for your agents here.
-  ; You are allowed to use the global variable 'ticks'.
-  
+to execute-actions  
   ;adding new buses at time intervals 
   make-new-buses
   
+  ;sending message if there is a chokepoint in the system
+  ;send-message-as-boss
+  
   ;checking if the bus is at a stop
   if current_stop >= 0 [ 
-    
-    let beneficial_destinations destinations-that-should-be-on-bus self
-    
     ;dropping off any passengers who want to be at the stop
     drop-off-correct-passengers
     
+    let passengers_here get-passengers-at-stop current_stop
+    if next_intended_stop = -1 or length bus_passengers = 0 [
+      foreach passengers_here [
+        if length bus_passengers != bus_size [
+          pick-up-passenger item 0 ?
+        ]
+      ]
+    ]
+    
+    ;routed buses fix their next stop in this way
     if mode = 0 [
       move-along-route route_path
     ]
     
-    if mode = 1 [ 
+    ;"free mode" buses fix their next stop in this way
+    if mode = 1 and intention != "following orders" [ 
       spillover-actions self
+      ;act-on-message-from-boss
+    ]
+    
+    ;acting on a message received from the boss (meaning the free mode buses will move to a chokepoint)
+    if intention = "following orders" [ 
+      set long_term_path shortest-path bus_stop current_stop bus_stop desire
+      ifelse length long_term_path = 1 [
+        set intention "free movement"
+        spillover-actions self
+      ]
+      [
+        set next_intended_stop item 1 long_term_path
+      ]
+    ]
+    
+    if next_intended_stop != -1 [
+      ;calculating based on where the bus is going next
+      set beneficial_destinations destinations-that-should-be-on-bus self
     ]
     
     ;dropping off passengers who won't benefit from staying on the bus
     foreach bus_passengers [ 
       if not member? item 1 ? beneficial_destinations [
         drop-off-passenger item 0 ?
+        set num_passengers_dropped_off num_passengers_dropped_off + 1
       ]
     ]
-    
+  
     ;picking up passengers who would benefit from getting on the bus
-    let passengers_here get-passengers-at-stop current_stop
+    set passengers_here get-passengers-at-stop current_stop
     foreach passengers_here [
-      if not has-reached-capacity? self [
+      if length bus_passengers != bus_size [
         if member? item 1 ? beneficial_destinations [
         pick-up-passenger item 0 ?
+        set num_passengers_picked_up num_passengers_picked_up + 1
         ]
       ]
     ]
   ]
+  
+  if next_intended_stop != -1
+  [
   ;travelling to the next stop
-  if bus_id != 24 and ticks mod 15 = 0 [ 
-  send-message 24 long_term_path
-  ]
-  travel-to next_intended_stop         
+  travel-to next_intended_stop
+  ]         
 end
 
 ;_________________________________________________________________________________________________
@@ -109,8 +155,8 @@ to move-along-route [ dummy_route_path ]
       set stops_involved_in_route lput ? stops_involved_in_route
     ]
   ]
+  
   ifelse member? current_stop stops_involved_in_route [
-    set long_term_path stops_involved_in_route
     let next_stops item current_stop dummy_route_path
     let max_passengers_waiting -1
     let busiest_stop -1
@@ -123,48 +169,50 @@ to move-along-route [ dummy_route_path ]
       ]
     ]
     set next_intended_stop busiest_stop
-  ]
-  
+    set long_term_path (list next_intended_stop)
+    
+    let busiest_stop_on_route -1
+    let num_passengers_waiting_at_busiest_stop_on_route -1
+    foreach stops_involved_in_route [
+      let num_passengers_at_stop length get-passengers-at-stop ?
+      if num_passengers_at_stop > num_passengers_waiting_at_busiest_stop_on_route [
+        set busiest_stop_on_route ?
+        set num_passengers_waiting_at_busiest_stop_on_route num_passengers_at_stop
+      ]
+    ]
+    if num_passengers_waiting_at_busiest_stop_on_route = 0 and length bus_passengers = 0 [
+      set next_intended_stop -1
+    ]
+  ]  
   [
     set long_term_path shortest-path bus_stop current_stop bus_stop one-of stops_involved_in_route
     set next_intended_stop item 1 long_term_path
   ]
 end
 
+;_________________________________________________________________________________________________
+
+;_________________________________________________________________________________________________-
+
 to drop-off-correct-passengers
   foreach bus_passengers [ 
       if item 1 ? = current_stop [ 
-        drop-off-passenger item 0 ? 
+        drop-off-passenger item 0 ?
+        set score score + 1
+        set num_passengers_dropped_off num_passengers_dropped_off + 1
       ] 
-    ]
-end
-
-;FUNCTION which calculates whether being picked up by a bus will move a passenger closer to its destination
-;INPUT; the bus itself
-;OUTPUT;Boolean value
-to-report benefits-passenger-to-be-on-bus? [ bus passenger_destination ]
-  let current_distance_from_destination length-of-path (shortest-path bus_stop current_stop bus_stop passenger_destination)
-  
-  foreach long_term_path [ 
-    let distance_from_destination length-of-path (shortest-path bus_stop ? bus_stop passenger_destination)
-    if distance_from_destination < current_distance_from_destination [
-      report true ]
   ]
-  report false
 end
 
-to-report destinations-that-should-be-on-bus [ bus ]
+to-report destinations-that-should-be-on-bus [bus]
   let destinations_list []
   foreach n-values 24 [?] [
-    let possible_destination ?
-    let current_distance_from_destination length-of-path (shortest-path bus_stop current_stop bus_stop possible_destination)
     let is_benefit false
-    foreach long_term_path [
-      let distance_from_destination length-of-path (shortest-path bus_stop ?1 bus_stop possible_destination)
-      if distance_from_destination < current_distance_from_destination [
-        set is_benefit true
-      ]
-    ]  
+    let current_distance_from_destination length-of-path (shortest-path bus_stop current_stop bus_stop ?)
+    let distance_from_destination length-of-path (shortest-path bus_stop next_intended_stop bus_stop ?)
+    if distance_from_destination < current_distance_from_destination [ 
+      set is_benefit true
+    ]
     if is_benefit [ 
       set destinations_list lput ? destinations_list
     ]
@@ -174,39 +222,52 @@ end
 
 to make-new-buses
   if bus_id = 24 [ 
-      if ticks >= 0 [ 
-        if ticks mod 50 = 0 [ 
-          add-bus (3)
-        ]
+      if ticks <= 40 [ 
+        ifelse ticks >= 2 and ticks <= 10 [ add-bus 3 ] [ add-bus 2 ]
       ]
   ]
 end
 
 ;________________________________________________________________________________________________
 
+;________________________________________________________________________________________________
+
 to spillover-actions [bus]
-  if length long_term_path = 0 or length bus_passengers = 0 [
-    set long_term_path n-values 24 [?]
-  ]
-;    ;picking up passengers with destinations on the route (until bus is full)
-;    let available_passengers get-passengers-at-stop current_stop
-;    foreach available_passengers [ 
-;      if not has-reached-capacity? self [
-;        if not is-number? long_term_path [
-;          if member? bus_stop item 1 ? long_term_path [
-;            pick-up-passenger item 0 ?
-;          ]
-;        ]
-;      ]
-;    ]
-    
     ;getting a list of the possible next stops
-    set possible_next_stops (sort [link-neighbors] of bus_stop current_stop)
+    let possible_next_stops item current_stop graph
       
-    ;picking one of these at random  
-    let random_index random length possible_next_stops
-    let selected_stop (item random_index possible_next_stops)
-    set next_intended_stop ([who] of selected_stop)
+    ;going to the stop with the most people waiting
+    let max_people_waiting -1
+    let busiest_next_stop -1  
+    foreach possible_next_stops [
+      let num_people_waiting length get-passengers-at-stop ?
+      if num_people_waiting > max_people_waiting [
+        set max_people_waiting num_people_waiting
+        set busiest_next_stop ?
+      ]
+    ]
+    ifelse max_people_waiting = 0 and length bus_passengers = 0 [ 
+      let busiest_stop_in_system -1
+      let num_passengers_waiting_at_busiest_stop_in_system -1
+      foreach n-values 24 [?] [
+        let num_passengers_here length get-passengers-at-stop ?
+        if num_passengers_here > num_passengers_waiting_at_busiest_stop_in_system [
+          set busiest_stop_in_system ?
+          set num_passengers_waiting_at_busiest_stop_in_system num_passengers_here
+        ]
+      ]
+      ifelse busiest_stop_in_system = current_stop or num_passengers_waiting_at_busiest_stop_in_system < 20
+      [ 
+        set next_intended_stop -1
+      ]
+      [ 
+        set long_term_path shortest-path bus_stop current_stop bus_stop busiest_stop_in_system
+        set next_intended_stop item 1 long_term_path
+      ]
+    ]
+    [ 
+      set next_intended_stop busiest_next_stop
+    ]
     
     ;choosing the path based on where the passengers want to go
     let passenger_wishes where-are-passengers-on-bus-going self
@@ -224,29 +285,81 @@ to spillover-actions [bus]
       set long_term_path but-first long_term_path
       if length long_term_path > 0 [ 
         set next_intended_stop (item 0 long_term_path)
-      ] 
-    ]
-    if next_intended_stop = 8 and current_stop = 9 [
-      set next_intended_stop item (random 2) [ 3 20 ]
-      foreach bus_passengers [
-        let destination item 1 ?
-        if destination = 8 or destination = 6 or destination = 2 [
-          drop-off-passenger item 0 ?
-        ]
-      ]
-    ]
-    if current_stop = 9 [
-      let available_passengers get-passengers-at-stop current_stop
-      foreach available_passengers [ 
-        let destination item 1 ?
-        if not has-reached-capacity? self [ 
-          if destination != 8 and destination != 6 and destination != 2 [
-            pick-up-passenger item 0 ?
-          ]
-        ]
       ]
     ]
 end
 
 ;__________________________________________________________________________________________________________________________________________
 
+to-report making-route
+  set route_path []
+  repeat 24 [ set route_path lput [] route_path ]
+  
+  if route_type = 0 [
+    set route_path [[] [] [8] [9] [] [] [8] [] [9 2 6] [3 8] [] [] [] [] [] [] [] [] [] [] [] [] [] []]
+  ]
+  if route_type = 1 [
+    set route_path [[] [] [] [] [] [] [] [] [] [] [17 21] [17] [15 22] [10 22] [] [12 18] [] [10 11] [15] [] [] [10 22] [12 21] []]
+  ]
+  if route_type = 2 [
+    set route_path [[14 22] [] [] [4] [3 10] [] [] [] [] [3 20] [4 13] [] [] [10 23] [0 23] [] [] [] [] [] [9 21] [20 22] [0 21] [13 14]]
+  ]
+  if route_type = 3 [
+    set route_path [[14 22] [] [] [9] [3 10] [] [] [] [] [3 20] [4 13] [] [] [10 23] [0 23] [] [] [] [] [] [9 21] [20 22] [0 21] [13 14]]
+  ]
+  if route_type = 4 [
+    set route_path [[] [] [] [] [] [] [] [13 17] [] [] [] [17] [15 22] [7 22] [] [12 18] [] [7 11] [15] [] [] [] [12 13] []]
+  ]
+  if route_type = 5 [
+    set route_path [[] [7 19] [] [4] [3 5] [4 17] [] [1 17] [] [] [] [] [] [] [] [] [] [5 7] [] [1] [] [] [] []]
+  ]
+  if route_type = 6 [
+    set route_path [[] [] [] [] [] [] [] [] [] [] [] [] [15 20] [] [] [12 18] [] [] [15] [] [12] [] [] []]
+  ]
+  if route_type = 7 [
+    set route_path [[] [] [] [16] [3] [4] [] [] [] [] [] [] [] [] [] [] [5] [] [] [] [] [] [] []]
+  ]
+  report route_path
+end
+
+to act-on-message-from-boss
+  if length inbox > 0 [
+    let last_message last inbox
+    let time_sent item 0 last_message
+    let sender item 1 last_message
+    let message_content item 2 last_message
+    if sender = 24 and ticks - time_sent < 2 [
+      set intention "following orders"
+      set desire message_content
+    ]
+  ]
+end
+
+to send-message-as-boss
+  let passengers_waiting_at_each_stop passengers-waiting-at-each-stop
+  if bus_id = 24 [
+    let stop_with_most_passengers -1
+    let max_amount_of_passengers -1
+    let total_number_of_passengers 0
+    foreach passengers_waiting_at_each_stop [
+      set total_number_of_passengers total_number_of_passengers + item 1 ?
+      if item 1 ? > max_amount_of_passengers [
+        set stop_with_most_passengers item 0 ?
+        set max_amount_of_passengers item 1 ?
+      ]
+    ]
+    if max_amount_of_passengers >= ceiling (0.3 * total_number_of_passengers) and total_number_of_passengers > 100 [
+      if length sort buses with [ mode = 1 and bus_id != 24 and intention = "free movement"] > 0 [
+        repeat 2 [ send-message [who] of one-of buses with [ mode = 1 and bus_id != 24 and intention = "free movement"] stop_with_most_passengers ]
+      ]
+    ]
+  ]
+end
+
+to-report passengers-waiting-at-each-stop
+  let passengers_waiting_at_each_stop []
+  foreach n-values 24 [?] [
+    set passengers_waiting_at_each_stop lput list ? length get-passengers-at-stop ? passengers_waiting_at_each_stop
+  ]
+  report passengers_waiting_at_each_stop
+end
