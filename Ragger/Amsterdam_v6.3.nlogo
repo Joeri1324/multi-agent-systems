@@ -196,10 +196,10 @@ end
 
 to update-routes
   ask routes [
-    set color red
-    set thickness 0.3
     let xcors []
     let ycors []
+    set color red
+    set thickness 0.3
     ask n-of 2 both-ends [
       set xcors lput xcor xcors
       set ycors lput ycor ycors
@@ -790,8 +790,8 @@ GRAPHICS-WINDOW
 40
 0
 30
-1
-1
+0
+0
 1
 ticks
 30.0
