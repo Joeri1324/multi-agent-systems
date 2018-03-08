@@ -22,6 +22,7 @@ buses-own [
   flags
   travel_along
   max_buses
+  standard-deviation-vote
 ]
  
 globals [graph]
@@ -33,7 +34,8 @@ to init-buses
   set dijkstra_out n-values length graph [dijkstra ?]
   set flags n-values length graph [which-stop-better ?]
   set added_bus 0
-  set max_buses 40
+  set max_buses 100
+  set standard-deviation-vote 20
 end
 
 to execute-actions
@@ -105,21 +107,26 @@ end
 ; Let passengers vote which next stop to go to
 ; Reports the number of the next stop with the highest passenger vote  
 to-report vote-next-stop [current_bs people next_flags]
-  let winning_stop -1
-  let highest_vote -1
-  foreach n-values length next_flags [?] [
-    let vote count-votes people item ? next_flags
-    if vote > highest_vote [
-      set highest_vote vote
-      set winning_stop ?
-    ]
-  ]  
-  report item winning_stop (item current_bs graph)      
+  ;let winning_stop -1
+  ;let highest_vote -1
+  
+  ;show reduce [ifelse-value (count-votes people item ?2 next_flags > count-votes people item ?1 next_flags) [?2] [?1]] n-values length next_flags [?]
+  report item (reduce [ifelse-value (count-votes people item ?2 next_flags > count-votes people item ?1 next_flags) [?2] [?1]] n-values length next_flags [?]) (item current_bs graph)
+  
+  
+  ;foreach n-values length next_flags [?] [
+  ;  let vote count-votes people item ? next_flags
+  ;  if vote > highest_vote [
+  ;    set highest_vote vote
+  ;    set winning_stop ?
+  ;  ]
+  ;]  
+  ;report item winning_stop (item current_bs graph)      
 end
 
 ; Reports the vote count for one destination 
 to-report count-votes [people stop_flags]
-  report reduce + map [ifelse-value (item (item 1 ?) stop_flags) [1] [0]] people
+  report max list 0 random-normal (reduce + map [ifelse-value (item (item 1 ?) stop_flags) [1] [0]] people) standard-deviation-vote
 end
 
 ; Function that is called instead of listening to the passengers
