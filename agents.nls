@@ -32,6 +32,8 @@ buses-own [
   score; number of passengers the bus has dropped off at their final destination
   num_passengers_dropped_off; number of passengers dropped off in total
   num_passengers_picked_up; number of passengers picked up in total
+  num_passengers_could_not_pick_up
+  total_num_buses
 ]
  
 globals [graph]
@@ -48,7 +50,7 @@ to init-buses
   set num_passengers_picked_up 0
   set mode 1
   
-  ifelse ticks >= 2 and ticks <= 10 [ set mode 0 ][ set mode 1 ]
+  ;ifelse ticks >= 2 and ticks <= 10 [ set mode 0 ][ set mode 1 ]
   ifelse mode = 1 [ set intention "free movement" ][ set intention "routed" ]
   if ticks = 2 [ set route_type 0 ]
   if ticks = 3 [ set route_type 1 ]
@@ -61,6 +63,7 @@ to init-buses
   if ticks = 10 [ set route_type 0 ]
   set route_path making-route
   
+  send-message 24 "new bus"
   
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
@@ -71,8 +74,11 @@ to execute-actions
   ;adding new buses at time intervals 
   make-new-buses
   
+  ;keeping track of any new buses made
+  count-buses
+  
   ;sending message if there is a chokepoint in the system
-  ;send-message-as-boss
+  send-message-as-boss
   
   ;checking if the bus is at a stop
   if current_stop >= 0 [ 
@@ -96,7 +102,7 @@ to execute-actions
     ;"free mode" buses fix their next stop in this way
     if mode = 1 and intention != "following orders" [ 
       spillover-actions self
-      ;act-on-message-from-boss
+      act-on-message-from-boss
     ]
     
     ;acting on a message received from the boss (meaning the free mode buses will move to a chokepoint)
@@ -126,15 +132,23 @@ to execute-actions
   
     ;picking up passengers who would benefit from getting on the bus
     set passengers_here get-passengers-at-stop current_stop
+    set num_passengers_could_not_pick_up 0
     foreach passengers_here [
-      if length bus_passengers != bus_size [
-        if member? item 1 ? beneficial_destinations [
-        pick-up-passenger item 0 ?
-        set num_passengers_picked_up num_passengers_picked_up + 1
+      if member? item 1 ? beneficial_destinations [
+        ifelse length bus_passengers != bus_size [
+          pick-up-passenger item 0 ?
+          set num_passengers_picked_up num_passengers_picked_up + 1
+        ]
+        [
+          set num_passengers_could_not_pick_up (num_passengers_could_not_pick_up + 1)
         ]
       ]
     ]
   ]
+  
+  if ticks mod 6 = 0 [ cast-vote ]
+  
+  aggregate-vote
   
   if next_intended_stop != -1
   [
@@ -222,7 +236,7 @@ end
 
 to make-new-buses
   if bus_id = 24 [ 
-      if ticks <= 40 [ 
+      if ticks <= 30 [ 
         ifelse ticks >= 2 and ticks <= 10 [ add-bus 3 ] [ add-bus 2 ]
       ]
   ]
@@ -256,7 +270,7 @@ to spillover-actions [bus]
           set num_passengers_waiting_at_busiest_stop_in_system num_passengers_here
         ]
       ]
-      ifelse busiest_stop_in_system = current_stop or num_passengers_waiting_at_busiest_stop_in_system < 20
+      ifelse busiest_stop_in_system = current_stop or num_passengers_waiting_at_busiest_stop_in_system = 0
       [ 
         set next_intended_stop -1
       ]
@@ -271,15 +285,13 @@ to spillover-actions [bus]
     
     ;choosing the path based on where the passengers want to go
     let passenger_wishes where-are-passengers-on-bus-going self
-    let majority_preference 0
+    let stop_wishes where-are-passengers-at-stop-going current_stop
+    let combined_wishes (map + passenger_wishes stop_wishes)
     let majority_destination -1
     let index n-values 24 [?]
-    foreach index [
-      if item ? passenger_wishes > majority_preference [ 
-        set majority_preference item ? passenger_wishes
-        set majority_destination ? 
-      ]
-    ]    
+    if max combined_wishes > 0 [
+      set majority_destination position max combined_wishes combined_wishes
+    ]   
     if majority_destination != -1 [ 
       set long_term_path shortest-path (bus_stop current_stop) (bus_stop majority_destination)
       set long_term_path but-first long_term_path
@@ -328,7 +340,7 @@ to act-on-message-from-boss
     let time_sent item 0 last_message
     let sender item 1 last_message
     let message_content item 2 last_message
-    if sender = 24 and ticks - time_sent < 2 [
+    if sender = 24 and ticks - time_sent < 2 and bus_id != 24 [
       set intention "following orders"
       set desire message_content
     ]
@@ -348,9 +360,9 @@ to send-message-as-boss
         set max_amount_of_passengers item 1 ?
       ]
     ]
-    if max_amount_of_passengers >= ceiling (0.3 * total_number_of_passengers) and total_number_of_passengers > 100 [
+    if max_amount_of_passengers >= ceiling (0.07 * total_number_of_passengers) and total_number_of_passengers > 100 [
       if length sort buses with [ mode = 1 and bus_id != 24 and intention = "free movement"] > 0 [
-        repeat 2 [ send-message [who] of one-of buses with [ mode = 1 and bus_id != 24 and intention = "free movement"] stop_with_most_passengers ]
+        repeat 2 [ send-message 25 + random (total_num_buses - 1) stop_with_most_passengers ]
       ]
     ]
   ]
@@ -362,4 +374,31 @@ to-report passengers-waiting-at-each-stop
     set passengers_waiting_at_each_stop lput list ? length get-passengers-at-stop ? passengers_waiting_at_each_stop
   ]
   report passengers_waiting_at_each_stop
+end
+
+to cast-vote
+  if num_passengers_could_not_pick_up >= (bus_size) and bus_id != 24 [
+    send-message 24 "vote for new bus"
+  ]
+end
+
+to count-buses
+  if bus_id = 24 [
+    if length inbox > 0 [
+      set total_num_buses length filter [ item 2 ? = "new bus" ] inbox
+    ]
+  ]
+end
+
+to aggregate-vote
+  let recent_votes []
+  if bus_id = 24 [
+    if length inbox > 0 [
+      set recent_votes filter [ item 0 ? <= ticks + 1 and item 0 ? >= ticks - 1 ] inbox
+    ]
+  ]
+  if length recent_votes >= total_num_buses / 2 and total_num_buses > 10 [
+   show "SYSTEM AT CAPACITY: adding new bus"
+   add-bus 2 
+  ]
 end
