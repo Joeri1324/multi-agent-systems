@@ -22,7 +22,11 @@ buses-own [
   flags
   travel_along
   max_buses
-  standard-deviation-vote
+  possible_destinations
+  destination
+  obedience
+  path
+  
 ]
  
 globals [graph]
@@ -32,10 +36,13 @@ to init-buses
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
   set dijkstra_out n-values length graph [dijkstra ?]
-  set flags n-values length graph [which-stop-better ?]
+  set flags array:from-list (n-values length graph [which-stop-better ?])
   set added_bus 0
-  set max_buses 100
-  set standard-deviation-vote 20
+  set max_buses 40
+  set obedience 0.5 ;0 = never listen to local passengers, 1 = always listen to local passengers
+  set possible_destinations remove current_stop n-values length graph [?]
+  set destination -1
+  set path []
 end
 
 to execute-actions
@@ -47,38 +54,50 @@ to execute-actions
   
   if at_bus_stop [
     
-    let passengers_total sentence get-passengers-at-stop current_stop bus_passengers
+    update-destinations
     
-    ifelse length passengers_total = 0 [
-      find-passengers ;
+    let local_passengers sentence get-passengers-at-stop current_stop bus_passengers
+     
+    ifelse (is-obedient local_passengers) [
+      listen-to-passengers local_passengers
     ][
-      listen-to-passengers passengers_total
+      pick-rare-destination
+      head-to-destination
     ]
+
+    set travel_along array:item (array:item flags current_stop) (position upcoming_stop (item current_stop graph))
     
     drop-off-passengers
     pick-up-passengers
     
+    
   ] 
   
   travel-to upcoming_stop
-  
+    
 end
 
 to drop-off-passengers
      ; Drop off traveling passengers
     foreach bus_passengers [
       let passenger_destination item 1 ?
-      if not (item passenger_destination travel_along)[
+      if not (array:item travel_along passenger_destination)[
         drop-off-passenger item 0 ?
       ]
     ]
 end
 
+
+;to communicate-destinations
+;  
+;end
+
+
 to pick-up-passengers
 ; Pick up waiting passengers
     foreach get-passengers-at-stop current_stop [
       let passenger_destination item 1 ?
-      if (item passenger_destination travel_along and length bus_passengers < capacity)[
+      if (length bus_passengers < capacity and array:item travel_along passenger_destination)[
         pick-up-passenger item 0 ?
       ]
     ]
@@ -92,47 +111,68 @@ to make-new-bus
   ]
 end
 
+; Updates the destination if arrived and possible destinations to visit
+to update-destinations
+  set possible_destinations remove current_stop possible_destinations
+  if current_stop = destination [
+    set destination -1
+  ]
+  if possible_destinations = [] [
+    set possible_destinations remove current_stop n-values length graph [?]
+  ]
+end
+
+; Reports if the bus is going to listen to the local passengers' next stop wishes or not  
+to-report is-obedient [local_passengers]
+  let obedient false
+  if random-float 1 < obedience [set obedient true]
+  if length local_passengers = 0 [set obedient false]
+  if length path > 0 [set obedient false]
+  report obedient 
+end  
+
 ; Reports a list containing a list for each adjacent stop in which each destination is flagged as better/closer "true" or worse "false"
 to-report which-stop-better [bs]
-  let current_distances n-values length graph [distance-from-to bs ?]
-  let next_flags []
-  foreach item bs graph[
-    let distances distance-to-destinations ?
-    let bs_flags (map [?1 - ?2 > 0] current_distances distances)
-    set next_flags lput bs_flags next_flags
+  let current_distances distance-to-destinations bs
+  let adjacent_stops item bs graph
+  let next_flags array:from-list n-values length adjacent_stops [0]
+  foreach n-values length adjacent_stops [?] [
+    let distances distance-to-destinations item ? adjacent_stops
+    let bs_flags array:from-list (map [?1 - ?2 > 0] current_distances distances)
+    array:set next_flags ? bs_flags
   ]
   report next_flags
 end
 
-; Let passengers vote which next stop to go to
 ; Reports the number of the next stop with the highest passenger vote  
-to-report vote-next-stop [current_bs people next_flags]
-  ;let winning_stop -1
-  ;let highest_vote -1
-  
-  ;show reduce [ifelse-value (count-votes people item ?2 next_flags > count-votes people item ?1 next_flags) [?2] [?1]] n-values length next_flags [?]
-  report item (reduce [ifelse-value (count-votes people item ?2 next_flags > count-votes people item ?1 next_flags) [?2] [?1]] n-values length next_flags [?]) (item current_bs graph)
-  
-  
-  ;foreach n-values length next_flags [?] [
-  ;  let vote count-votes people item ? next_flags
-  ;  if vote > highest_vote [
-  ;    set highest_vote vote
-  ;    set winning_stop ?
-  ;  ]
-  ;]  
-  ;report item winning_stop (item current_bs graph)      
+to-report vote-next-stop [current_bs travelers next_flags]
+  let winning_index (reduce [ifelse-value (count-votes travelers array:item next_flags ?2 > count-votes travelers array:item next_flags ?1) [?2] [?1]] n-values array:length next_flags [?])
+  report item winning_index (item current_bs graph)     
 end
 
 ; Reports the vote count for one destination 
-to-report count-votes [people stop_flags]
-  report max list 0 random-normal (reduce + map [ifelse-value (item (item 1 ?) stop_flags) [1] [0]] people) standard-deviation-vote
+to-report count-votes [travelers stop_flags]
+  report (reduce + map [ifelse-value (array:item stop_flags (item 1 ?)) [1] [0]] travelers)
 end
 
-; Function that is called instead of listening to the passengers
-; Randomly drives to one of the next stops to look for passengers
-; (this function should be improved to go in the direction of crowded stops)
-to find-passengers
+; Pick a new destination if needed
+to pick-rare-destination 
+  if destination = -1 [ 
+    set destination one-of possible_destinations
+    set path remove current_stop shortest-path current_stop destination 
+  ]  
+end
+
+; Continue along the path towards the destination   
+to head-to-destination  
+  if path != [] [
+    set upcoming_stop first path
+    set path remove first path path
+  ]
+end  
+
+; Drive randomly to one of adjacent stops (NOT USED CURRENTLY)
+to drive_randomly
   set upcoming_stop one-of item current_stop graph
 end
 
@@ -147,10 +187,9 @@ to-report distance-from-to [bs1 bs2]
 end
 
 ; Function that will decide the next stop based on passenger votes (called when arrived at a bus stop)
-to listen-to-passengers [people]
-  let next_flags item current_stop flags
-  set upcoming_stop vote-next-stop current_stop people next_flags
-  set travel_along item (position upcoming_stop (item current_stop graph)) next_flags
+to listen-to-passengers [travelers]
+  let next_flags array:item flags current_stop 
+  set upcoming_stop vote-next-stop current_stop travelers next_flags
 end
 
 
