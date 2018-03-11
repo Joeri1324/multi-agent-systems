@@ -146,7 +146,7 @@ to execute-actions
     ]
   ]
   
-  if ticks mod 6 = 0 [ cast-vote ]
+  if ticks mod 10 = 0 [ cast-vote ]
   
   aggregate-vote
   
@@ -236,8 +236,8 @@ end
 
 to make-new-buses
   if bus_id = 24 [ 
-      if ticks <= 30 [ 
-        ifelse ticks >= 2 and ticks <= 10 [ add-bus 3 ] [ add-bus 2 ]
+      if ticks <= 45 [ 
+        ifelse ticks >= 2 and ticks <= 10 [ add-bus 2 ] [ add-bus 2 ]
       ]
   ]
 end
@@ -360,10 +360,8 @@ to send-message-as-boss
         set max_amount_of_passengers item 1 ?
       ]
     ]
-    if max_amount_of_passengers >= ceiling (0.07 * total_number_of_passengers) and total_number_of_passengers > 100 [
-      if length sort buses with [ mode = 1 and bus_id != 24 and intention = "free movement"] > 0 [
-        repeat 2 [ send-message 25 + random (total_num_buses - 1) stop_with_most_passengers ]
-      ]
+    if max_amount_of_passengers >= ceiling (0.1 * total_number_of_passengers) and total_number_of_passengers > 100 [
+      repeat 3 [ send-message 25 + random (total_num_buses - 1) stop_with_most_passengers ]
     ]
   ]
 end
@@ -377,7 +375,7 @@ to-report passengers-waiting-at-each-stop
 end
 
 to cast-vote
-  if num_passengers_could_not_pick_up >= (bus_size) and bus_id != 24 [
+  if num_passengers_could_not_pick_up >= (0.3 * bus_size) and bus_id != 24 [
     send-message 24 "vote for new bus"
   ]
 end
@@ -394,11 +392,15 @@ to aggregate-vote
   let recent_votes []
   if bus_id = 24 [
     if length inbox > 0 [
-      set recent_votes filter [ item 0 ? <= ticks + 1 and item 0 ? >= ticks - 1 ] inbox
+      set recent_votes filter [ item 0 ? = ticks - 1 ] inbox
     ]
   ]
-  if length recent_votes >= total_num_buses / 2 and total_num_buses > 10 [
-   show "SYSTEM AT CAPACITY: adding new bus"
-   add-bus 2 
+  if length recent_votes >= (0.5 * total_num_buses) and total_num_buses > 10 [
+   repeat 5 [ 
+     if random 1440 > ticks [ 
+       add-bus 2
+       show "SYSTEM AT CAPACITY: adding new bus"
+     ]
+   ]
   ]
 end
