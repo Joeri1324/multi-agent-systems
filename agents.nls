@@ -78,7 +78,7 @@ to execute-actions
   count-buses
   
   ;sending message if there is a chokepoint in the system
-  send-message-as-boss
+  ;if bus_id = 24 [ send-message-as-boss-2 ]
   
   ;checking if the bus is at a stop
   if current_stop >= 0 [ 
@@ -102,7 +102,7 @@ to execute-actions
     ;"free mode" buses fix their next stop in this way
     if mode = 1 and intention != "following orders" [ 
       spillover-actions self
-      act-on-message-from-boss
+      ;act-on-message-from-boss
     ]
     
     ;acting on a message received from the boss (meaning the free mode buses will move to a chokepoint)
@@ -146,7 +146,7 @@ to execute-actions
     ]
   ]
   
-  if ticks mod 10 = 0 [ cast-vote ]
+  if ticks mod 20 = 0 [ cast-vote ]
   
   aggregate-vote
   
@@ -299,6 +299,13 @@ to spillover-actions [bus]
         set next_intended_stop (item 0 long_term_path)
       ]
     ]
+    
+    if random 5 = 0 and next_intended_stop != -1 [
+      let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
+      let stop_chosen choose-stop-by-probability passengers_waiting_at_each_stop
+      set desire stop_chosen
+      set intention "following orders"
+    ]
 end
 
 ;__________________________________________________________________________________________________________________________________________
@@ -366,6 +373,28 @@ to send-message-as-boss
   ]
 end
 
+to send-message-as-boss-2 
+  let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
+  let stop_chosen choose-stop-by-probability passengers_waiting_at_each_stop
+  let total_number_of_passengers sum passengers_waiting_at_each_stop
+  if total_number_of_passengers > 100 [
+    repeat 4 [ send-message 25 + random (total_num_buses - 1) stop_chosen ]
+  ]
+end
+
+to-report choose-stop-by-probability [ passenger_list ]
+  let total_number_of_passengers sum passenger_list
+  let stop_chosen 3
+  let random_number random total_number_of_passengers + 1  
+  foreach n-values length passenger_list [?] [
+    if random_number > 0 [
+      set random_number random_number - item ? passenger_list
+      set stop_chosen ?
+    ]
+  ] 
+  report stop_chosen
+end
+
 to-report passengers-waiting-at-each-stop
   let passengers_waiting_at_each_stop []
   foreach n-values 24 [?] [
@@ -396,11 +425,11 @@ to aggregate-vote
     ]
   ]
   if length recent_votes >= (0.5 * total_num_buses) and total_num_buses > 10 [
-   repeat 5 [ 
-     if random 1440 > ticks [ 
-       add-bus 2
-       show "SYSTEM AT CAPACITY: adding new bus"
-     ]
-   ]
+    repeat 10 [ 
+      if random 1440 > ticks [ 
+        add-bus 2
+        show "SYSTEM AT CAPACITY: adding new bus"
+      ]
+    ]
   ]
 end
