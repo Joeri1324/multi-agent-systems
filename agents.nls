@@ -101,7 +101,7 @@ to execute-actions
     
     ;"free mode" buses fix their next stop in this way
     if mode = 1 and intention != "following orders" [ 
-      spillover-actions self
+      navigate
       ;act-on-message-from-boss
     ]
     
@@ -110,7 +110,7 @@ to execute-actions
       set long_term_path shortest-path bus_stop current_stop bus_stop desire
       ifelse length long_term_path = 1 [
         set intention "free movement"
-        spillover-actions self
+        navigate
       ]
       [
         set next_intended_stop item 1 long_term_path
@@ -146,7 +146,7 @@ to execute-actions
     ]
   ]
   
-  if ticks mod 20 = 0 [ cast-vote ]
+  if ticks mod 10 = 0 [ cast-vote ]
   
   aggregate-vote
   
@@ -236,7 +236,7 @@ end
 
 to make-new-buses
   if bus_id = 24 [ 
-      if ticks <= 45 [ 
+      if ticks <= 15 [ 
         ifelse ticks >= 2 and ticks <= 10 [ add-bus 2 ] [ add-bus 2 ]
       ]
   ]
@@ -246,7 +246,7 @@ end
 
 ;________________________________________________________________________________________________
 
-to spillover-actions [bus]
+to navigate
     ;getting a list of the possible next stops
     let possible_next_stops item current_stop graph
       
@@ -255,29 +255,15 @@ to spillover-actions [bus]
     let busiest_next_stop -1  
     foreach possible_next_stops [
       let num_people_waiting length get-passengers-at-stop ?
-      if num_people_waiting > max_people_waiting [
-        set max_people_waiting num_people_waiting
+      let adjusted_count num_people_waiting / get-distance current_stop ?
+      if adjusted_count > max_people_waiting [
+        set max_people_waiting adjusted_count
         set busiest_next_stop ?
       ]
     ]
+    
     ifelse max_people_waiting = 0 and length bus_passengers = 0 [ 
-      let busiest_stop_in_system -1
-      let num_passengers_waiting_at_busiest_stop_in_system -1
-      foreach n-values 24 [?] [
-        let num_passengers_here length get-passengers-at-stop ?
-        if num_passengers_here > num_passengers_waiting_at_busiest_stop_in_system [
-          set busiest_stop_in_system ?
-          set num_passengers_waiting_at_busiest_stop_in_system num_passengers_here
-        ]
-      ]
-      ifelse busiest_stop_in_system = current_stop or num_passengers_waiting_at_busiest_stop_in_system = 0
-      [ 
-        set next_intended_stop -1
-      ]
-      [ 
-        set long_term_path shortest-path bus_stop current_stop bus_stop busiest_stop_in_system
-        set next_intended_stop item 1 long_term_path
-      ]
+      set next_intended_stop -1
     ]
     [ 
       set next_intended_stop busiest_next_stop
@@ -292,19 +278,18 @@ to spillover-actions [bus]
     if max combined_wishes > 0 [
       set majority_destination position max combined_wishes combined_wishes
     ]   
-    if majority_destination != -1 [ 
-      set long_term_path shortest-path (bus_stop current_stop) (bus_stop majority_destination)
-      set long_term_path but-first long_term_path
-      if length long_term_path > 0 [ 
-        set next_intended_stop (item 0 long_term_path)
-      ]
+    if majority_destination != -1 and majority_destination != current_stop [ 
+      set long_term_path shortest-path (bus_stop current_stop) (bus_stop majority_destination) 
+      set next_intended_stop (item 1 long_term_path)
     ]
     
-    if random 5 = 0 and next_intended_stop != -1 [
+    if random 5 = 0 [
       let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
-      let stop_chosen choose-stop-by-probability passengers_waiting_at_each_stop
-      set desire stop_chosen
-      set intention "following orders"
+      if max passengers_waiting_at_each_stop != 0 [
+        let stop_chosen choose-stop-by-probability passengers_waiting_at_each_stop
+        set desire stop_chosen
+        set intention "following orders"
+      ]
     ]
 end
 
@@ -404,7 +389,7 @@ to-report passengers-waiting-at-each-stop
 end
 
 to cast-vote
-  if num_passengers_could_not_pick_up >= (0.3 * bus_size) and bus_id != 24 [
+  if num_passengers_could_not_pick_up >= (0.05 * bus_size) and bus_id != 24 [
     send-message 24 "vote for new bus"
   ]
 end
@@ -424,8 +409,9 @@ to aggregate-vote
       set recent_votes filter [ item 0 ? = ticks - 1 ] inbox
     ]
   ]
-  if length recent_votes >= (0.5 * total_num_buses) and total_num_buses > 10 [
-    repeat 10 [ 
+  if length recent_votes >= (0.5 * (total_num_buses - 1)) and total_num_buses > 10 [
+    show word "VOTE IN PROGRESS at time: " ticks
+    repeat 5 [ 
       if random 1440 > ticks [ 
         add-bus 2
         show "SYSTEM AT CAPACITY: adding new bus"
