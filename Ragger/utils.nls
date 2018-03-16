@@ -69,3 +69,7 @@ to-report dijkstra [vertexFrom]
   set result lput dist result
   report result
 end
+
+to-report occurrences [x the-list]
+  report reduce [ifelse-value (?2 = x) [?1 + 1] [?1]] (fput 0 the-list)
+end

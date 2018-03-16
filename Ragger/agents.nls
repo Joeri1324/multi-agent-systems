@@ -15,39 +15,67 @@ buses-own [
 
   ; New local variables for students.
   ; You can create any new local variable you want. Just declare them here.
-  capacity
-  added_bus
+  coordinator_bus
+  interval
   dijkstra_out
   upcoming_stop
   flags
-  travel_along
-  max_buses
+  buses_needed
+  fabrication_orders
   possible_destinations
   destination
   obedience
   path
+  most_people_at_stop
+  passenger_counts
+  last_mean_passenger_count
+  bus_type_consensus
   
 ]
  
 globals [graph]
 
 to init-buses
-  set capacity int item (bus_type - 1) [12 60 150]
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
   set dijkstra_out n-values length graph [dijkstra ?]
   set flags array:from-list (n-values length graph [which-stop-better ?])
-  set added_bus 0
-  set max_buses 40
-  set obedience 0.5 ;0 = never listen to local passengers, 1 = always listen to local passengers
+  set coordinator_bus 24 ; should be the first bus to coordinate new buses
+  set fabrication_orders ifelse-value (bus_id = coordinator_bus) [1][0]
+  set interval 15 ; e.g. 5, 10, 15, 30, 60
+  set buses_needed 12 ; Used by coordinator bus
+  set obedience 0.9 ; (parameter to tune) 0 = never listen to local passengers, 1 = always listen to local passengers
   set possible_destinations remove current_stop n-values length graph [?]
   set destination -1
   set path []
+  set passenger_counts [] ; list that will contain the global waiting passengers for each tick
+  set last_mean_passenger_count amount_passengers_waiting ; last mean of passenger_counts
+  set most_people_at_stop 0 ; Highest number of passengers the bus has encountered so far
+  set bus_type_consensus 2 ; Consensus of what type the buses to add should be of
 end
 
 to execute-actions
   
-  make-new-bus
+  ; Update and vote every -interval- ticks
+  if ticks mod interval = 0 [
+    vote-bus-type
+  ]
+  
+  ; Coordinator bus shares the voted bus_type consensus and bus_limit to other buses
+  if bus_id = coordinator_bus [
+    if ticks mod interval = 1 [
+      share-info
+    ]
+    ; Keep track of global passenger counts
+    set passenger_counts lput amount_passengers_waiting passenger_counts
+  ]
+  
+  ; Update the bus type consensus
+  if ticks mod interval = 2 and bus_id != coordinator_bus [
+    update-info
+  ]
+  
+  make-new-bus bus_type_consensus
  
   ; Check if at bus stop
   let at_bus_stop current_stop != -1
@@ -57,6 +85,7 @@ to execute-actions
     update-destinations
     
     let local_passengers sentence get-passengers-at-stop current_stop bus_passengers
+    if length local_passengers > most_people_at_stop [set most_people_at_stop length local_passengers]
      
     ifelse (is-obedient local_passengers) [
       listen-to-passengers local_passengers
@@ -65,10 +94,10 @@ to execute-actions
       head-to-destination
     ]
 
-    set travel_along array:item (array:item flags current_stop) (position upcoming_stop (item current_stop graph))
+    let travel_along array:item (array:item flags current_stop) (position upcoming_stop (item current_stop graph))
     
-    drop-off-passengers
-    pick-up-passengers
+    drop-off-passengers travel_along
+    pick-up-passengers travel_along
     
     
   ] 
@@ -77,7 +106,7 @@ to execute-actions
     
 end
 
-to drop-off-passengers
+to drop-off-passengers [travel_along]
      ; Drop off traveling passengers
     foreach bus_passengers [
       let passenger_destination item 1 ?
@@ -87,27 +116,80 @@ to drop-off-passengers
     ]
 end
 
-
-;to communicate-destinations
-;  
-;end
-
-
-to pick-up-passengers
+to pick-up-passengers [travel_along]
 ; Pick up waiting passengers
     foreach get-passengers-at-stop current_stop [
       let passenger_destination item 1 ?
-      if (length bus_passengers < capacity and array:item travel_along passenger_destination)[
+      if (length bus_passengers < capacity bus_type and array:item travel_along passenger_destination)[
         pick-up-passenger item 0 ?
       ]
     ]
 end
 
+; Send vote of bus type preference to coordinator bus
+to vote-bus-type 
+  send-message coordinator_bus list "vote bus type" (ifelse-value (most_people_at_stop < 60) [2][3])
+  set most_people_at_stop 0
+end
+
+
+; Check if the last inbox message was recently sent, and update accordingly
+to update-info
+  if length inbox > 0 [
+    let last_update last filter [first item 2 ? = "updates"] inbox
+    set bus_type_consensus item 1 item 2 last_update
+    set fabrication_orders fabrication_orders + item 2 item 2 last_update
+  ]
+end
+
+; (Coordinator bus function)
+; Determine bus limit based on waiting passenger increment and the chosen passengers_per_bus parameter
+to-report determine-buses-needed
+  let increment last_mean_passenger_count - mean passenger_counts
+  set passenger_counts []
+  if increment > 0 [
+    report round (increment / capacity bus_type_consensus)
+  ]
+  report 0
+end
+
+; (Coordinator bus function)
+; Report the consensus of the bus_type based on the votes
+to-report consensus-of-votes
+  let new_messages filter [first ? = ticks - 1 and first item 2 ? = "vote bus type"] inbox
+  let votes map [item 1 item 2 ?] new_messages
+  let vote_counts map [occurrences ? votes][2 3]
+  report ifelse-value (item 0 vote_counts > item 1 vote_counts) [2][3]
+end
+
+; (Coordinator bus function)
+; Ask for more bus support by dividing the amount of buses that need to be fabricated over the other buses
+to share-info
+  set bus_type_consensus consensus-of-votes
+  set buses_needed (buses_needed + determine-buses-needed)
+  let fabricators determine-fabricators
+  foreach [bus_id] of other buses [
+    send-message ? (list "updates" bus_type_consensus occurrences ? fabricators)
+  ]    
+end
+
+; (Coordinator bus function)
+; Randomly pick a set of existing agents to make the amount of new buses required
+to-report determine-fabricators
+  let fabricators []
+  while [buses_needed > 0] [
+    let fabricator one-of [bus_id] of other buses
+    set fabricators lput fabricator fabricators
+    set buses_needed buses_needed - 1
+  ]
+  report fabricators
+end
+  
 ; Create new buss
-to make-new-bus
-  if count buses < max_buses and added_bus = 0 [
-    add-bus 2
-    set added_bus 1
+to make-new-bus [carry_type]
+  if fabrication_orders > 0 [
+    add-bus carry_type
+    set fabrication_orders fabrication_orders - 1
   ]
 end
 
@@ -191,6 +273,10 @@ to listen-to-passengers [travelers]
   let next_flags array:item flags current_stop 
   set upcoming_stop vote-next-stop current_stop travelers next_flags
 end
+
+to-report capacity [type_of_bus]
+  report item (type_of_bus - 1) [12 60 150]
+end  
 
 
 
