@@ -118,8 +118,11 @@ to execute-actions
     ;picking up passengers going to the majority destination
     let passengers_here get-passengers-at-stop current_stop
     set num_passengers_could_not_pick_up 0
+    
+    let votes_for_next_destination votes-for-next-destination current_stop
+    
     foreach passengers_here [
-      if item 1 ? = last long_term_path [
+      if item (item 1 ?) votes_for_next_destination = next_intended_stop [
         if length bus_passengers != bus_size [
           pick-up-passenger item 0 ?
           set num_passengers_picked_up num_passengers_picked_up + 1
@@ -241,7 +244,7 @@ end
 
 to make-new-buses
   if bus_id = 24 [ 
-      if ticks <= 70 [ 
+      if ticks <= 45 [ 
         add-bus 2
         set total_num_buses total_num_buses + 1
       ]
@@ -287,29 +290,32 @@ to navigate
       set next_intended_stop busiest_next_stop
     ]
     
-    ;choosing the path based on where the passengers want to go
-    let combined_wishes where-are-passengers-at-stop-going current_stop
-    let majority_destination -1
-    if max combined_wishes > 0 [
-      set majority_destination position max combined_wishes combined_wishes
-    ]
-       
-    let reasonable_choices filter [ item ? combined_wishes >= bus_size ] n-values 24 [?]
-    if length reasonable_choices > 1 [
-;      let current_distance 1000
-;      foreach reasonable_choices [
-;        let new_distance length-of-path shortest-path bus_stop current_stop bus_stop ?
-;        if new_distance < current_distance [
-;          set current_distance new_distance
-;          set majority_destination ?
-;        ]
-;      ]
-      set majority_destination one-of reasonable_choices
-    ]
+;    ;choosing the path based on where the passengers want to go
+;    let combined_wishes where-are-passengers-at-stop-going current_stop
+;    let majority_destination -1
+;    if max combined_wishes > 0 [
+;      set majority_destination position max combined_wishes combined_wishes
+;    ]
+;       
+;    let reasonable_choices filter [ item ? combined_wishes >= bus_size ] n-values 24 [?]
+;    if length reasonable_choices > 1 [
+;;      let current_distance 1000
+;;      foreach reasonable_choices [
+;;        let new_distance length-of-path shortest-path bus_stop current_stop bus_stop ?
+;;        if new_distance < current_distance [
+;;          set current_distance new_distance
+;;          set majority_destination ?
+;;        ]
+;;      ]
+;      set majority_destination one-of reasonable_choices
+;    ]
+
+    let majority_destination calculate-preferred-next-destination current_stop
     
     if majority_destination != -1 and majority_destination != current_stop [ 
-      set long_term_path shortest-path (bus_stop current_stop) (bus_stop majority_destination) 
-      set next_intended_stop (item 1 long_term_path)
+      ;set long_term_path shortest-path (bus_stop current_stop) (bus_stop majority_destination) 
+      ;set next_intended_stop (item 1 long_term_path)
+      set next_intended_stop majority_destination
     ]
     
     ;occasionally heading to a busy stop (weighted by passenger count)
@@ -464,4 +470,44 @@ to aggregate-vote
       ]
     ]
   ]
+end
+
+to-report votes-for-next-destination [current_stop_id]
+  let votes []
+  let possible_next_stops item current_stop_id graph
+  foreach n-values 24 [?] [
+    let destination ?
+    let current_min_distance length-of-path shortest-path bus_stop current_stop_id bus_stop destination
+    let current_preferred_destination -1
+    foreach possible_next_stops [
+      let new_distance length-of-path shortest-path bus_stop ? bus_stop destination
+      if new_distance < current_min_distance [
+        set current_min_distance new_distance
+        set current_preferred_destination ?
+      ]
+    ]
+      set votes lput current_preferred_destination votes
+  ]
+  report votes
+end
+
+to-report calculate-preferred-next-destination [ current_stop_id ]
+  let preferred_next_destination -1
+  let counts []
+  repeat 24 [ set counts lput 0 counts ]
+  let passengers_here get-passengers-at-stop current_stop_id
+  let votes_for_next_destination votes-for-next-destination current_stop_id
+  let possible_next_stops item current_stop_id graph
+  foreach passengers_here [
+    let destination item 1 ?
+    foreach possible_next_stops [
+      if item destination votes_for_next_destination = ? [
+        set counts replace-item ? counts (item ? counts + 1)
+      ]
+    ]
+  ]
+  if max counts != 0 [
+    set preferred_next_destination position (max counts) counts
+  ]
+  report preferred_next_destination
 end
