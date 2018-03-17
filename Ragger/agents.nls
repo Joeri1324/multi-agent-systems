@@ -43,13 +43,13 @@ to init-buses
   set coordinator_bus 24 ; should be the first bus to coordinate new buses
   set fabrication_orders ifelse-value (bus_id = coordinator_bus) [1][0]
   set interval 15 ; e.g. 5, 10, 15, 30, 60
-  set buses_needed 12 ; Used by coordinator bus
+  set buses_needed 12 ; (coordinator)
   set obedience 0.9 ; (parameter to tune) 0 = never listen to local passengers, 1 = always listen to local passengers
   set possible_destinations remove current_stop n-values length graph [?]
   set destination -1
   set path []
-  set passenger_counts [] ; list that will contain the global waiting passengers for each tick
-  set last_mean_passenger_count amount_passengers_waiting ; last mean of passenger_counts
+  set passenger_counts [] ; (coordinator) list that will contain the global waiting passengers for each tick
+  set last_mean_passenger_count amount_passengers_waiting (coordinator); last mean of passenger_counts
   set most_people_at_stop 0 ; Highest number of passengers the bus has encountered so far
   set bus_type_consensus 2 ; Consensus of what type the buses to add should be of
 end
