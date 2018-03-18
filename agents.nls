@@ -34,6 +34,7 @@ buses-own [
   num_passengers_picked_up; number of passengers picked up in total
   num_passengers_could_not_pick_up
   total_num_buses
+  distance_from_destination ;used for negotiations/argumentation
 ]
  
 globals [graph]
@@ -80,6 +81,7 @@ to execute-actions
   
   ;sending message if there is a chokepoint in the system
   ;if bus_id = 24 [ send-message-as-boss-2 ]
+  ;if bus_id = 24 [ initiate-bargaining ]
   
   ;checking if the bus is at a stop
   if current_stop >= 0 [ 
@@ -114,7 +116,12 @@ to execute-actions
         set next_intended_stop item 1 long_term_path
       ]
     ]
-  
+    
+;    if bus_id != 24 [ 
+;      enter-into-negotiation
+;      respond-to-negotiation
+;    ]
+    
     ;picking up passengers going to the majority destination
     let passengers_here get-passengers-at-stop current_stop
     set num_passengers_could_not_pick_up 0
@@ -231,7 +238,7 @@ to-report destinations-that-should-be-on-bus
   foreach n-values 24 [?] [
     let is_benefit false
     let current_distance_from_destination length-of-path (shortest-path bus_stop current_stop bus_stop ?)
-    let distance_from_destination length-of-path (shortest-path bus_stop next_intended_stop bus_stop ?)
+    set distance_from_destination length-of-path (shortest-path bus_stop next_intended_stop bus_stop ?)
     if distance_from_destination < current_distance_from_destination [ 
       set is_benefit true
     ]
@@ -244,7 +251,7 @@ end
 
 to make-new-buses
   if bus_id = 24 [ 
-      if ticks <= 45 [ 
+      if ticks <= 40 [ 
         add-bus 2
         set total_num_buses total_num_buses + 1
       ]
@@ -289,26 +296,6 @@ to navigate
     [ 
       set next_intended_stop busiest_next_stop
     ]
-    
-;    ;choosing the path based on where the passengers want to go
-;    let combined_wishes where-are-passengers-at-stop-going current_stop
-;    let majority_destination -1
-;    if max combined_wishes > 0 [
-;      set majority_destination position max combined_wishes combined_wishes
-;    ]
-;       
-;    let reasonable_choices filter [ item ? combined_wishes >= bus_size ] n-values 24 [?]
-;    if length reasonable_choices > 1 [
-;;      let current_distance 1000
-;;      foreach reasonable_choices [
-;;        let new_distance length-of-path shortest-path bus_stop current_stop bus_stop ?
-;;        if new_distance < current_distance [
-;;          set current_distance new_distance
-;;          set majority_destination ?
-;;        ]
-;;      ]
-;      set majority_destination one-of reasonable_choices
-;    ]
 
     let majority_destination calculate-preferred-next-destination current_stop
     
@@ -319,12 +306,17 @@ to navigate
     ]
     
     ;occasionally heading to a busy stop (weighted by passenger count)
-    if random 5 = 0 [
+    if random 8 = 0 [
       let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
+      let passenger_destinations_in_system where-are-passengers-in-system-going
+      let adjusted_passenger_destinations (map / passengers_waiting_at_each_stop passenger_destinations_in_system)
+      set adjusted_passenger_destinations map ceiling adjusted_passenger_destinations
       if max passengers_waiting_at_each_stop != 0 [
-        let stop_chosen choose-stop-by-probability passengers_waiting_at_each_stop
+        let stop_chosen choose-stop-by-probability adjusted_passenger_destinations
         set desire stop_chosen
         set intention "following orders"
+        set distance_from_destination length-of-path shortest-path bus_stop current_stop bus_stop desire
+        ;send-message 24 list current_stop desire
       ]
     ]
 end
@@ -510,4 +502,69 @@ to-report calculate-preferred-next-destination [ current_stop_id ]
     set preferred_next_destination position (max counts) counts
   ]
   report preferred_next_destination
+end
+
+to initiate-bargaining
+  if bus_id = 24 [
+    if length inbox > 0 [
+      let recent_random_destinations filter [ item 0 ? >= ticks - 3 and is-list? item 2 ? ] inbox
+      let numbers_for_each_destination []
+      repeat 24 [ set numbers_for_each_destination lput [] numbers_for_each_destination ]
+      foreach recent_random_destinations [
+        let sender item 1 ?
+        let message_content item 2 ?
+        set numbers_for_each_destination replace-item (item 1 message_content) numbers_for_each_destination lput sender item (item 1 message_content) numbers_for_each_destination
+      ]
+      foreach numbers_for_each_destination [
+        let buses_in_negotiation ?
+        if length buses_in_negotiation > 1 [
+          foreach buses_in_negotiation [
+            if ? != 24 [
+              send-message ? buses_in_negotiation
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+end
+
+to enter-into-negotiation
+  let recent_messages filter [ item 0 ? = ticks - 1 ] inbox
+  let buses_in_negotiation []
+  foreach recent_messages [
+    let sender item 1 ?
+    let message_content item 2 ?
+    if sender = 24 [
+      set buses_in_negotiation message_content
+    ]
+  ]
+  foreach buses_in_negotiation [
+    if ? != bus_id [
+      send-message ? distance_from_destination
+    ]
+  ]
+end
+
+to respond-to-negotiation
+  let recent_messages filter [ item 0 ? = ticks - 1 and is-number? item 2 ? ] inbox
+  if length recent_messages > 0 [
+    let distances_of_negotiators []
+    foreach recent_messages [
+      set distances_of_negotiators lput item 2 ? distances_of_negotiators
+    ]
+    if max distances_of_negotiators < distance_from_destination [
+      set intention "free movement"
+      navigate
+    ]
+  ]
+end
+
+to-report where-are-passengers-in-system-going
+  let destinations []
+  repeat 24 [ set destinations lput 1 destinations ]
+  foreach n-values 24 [?] [
+    set destinations (map + (where-are-passengers-at-stop-going ?) destinations)
+  ]
+  report destinations
 end
