@@ -309,6 +309,7 @@ to navigate
     if random 8 = 0 [
       let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
       let passenger_destinations_in_system where-are-passengers-in-system-going
+      set passenger_destinations_in_system (map [? / 2] passenger_destinations_in_system)
       let adjusted_passenger_destinations (map / passengers_waiting_at_each_stop passenger_destinations_in_system)
       set adjusted_passenger_destinations map ceiling adjusted_passenger_destinations
       if max passengers_waiting_at_each_stop != 0 [
