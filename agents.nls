@@ -255,19 +255,19 @@ to make-new-buses
         add-bus 2
         set total_num_buses total_num_buses + 1
       ]
-;      if ticks mod 15 = 14 [
-;        let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
-;        let num_passengers_in_system sum passengers_waiting_at_each_stop
-;        if num_passengers_in_system > total_num_buses * 60 [
-;          repeat 10 * floor (num_passengers_in_system / (total_num_buses * 60)) [
-;            if random 1440 > (ticks + 300) [
-;              add-bus 2
-;              show word "ADDING BUS at time: " ticks
-;              set total_num_buses total_num_buses + 1
-;            ]
-;          ]
-;        ]
-;      ]
+      if ticks mod 15 = 14 [
+        let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
+        let num_passengers_in_system sum passengers_waiting_at_each_stop
+        if num_passengers_in_system > total_num_buses * 60 [
+          repeat 10 * floor (num_passengers_in_system / (total_num_buses * 60)) [
+            if random 1440 > (ticks + 300) [
+              add-bus 2
+              show word "ADDING BUS at time: " ticks
+              set total_num_buses total_num_buses + 1
+            ]
+          ]
+        ]
+      ]
   ]
 end
 
