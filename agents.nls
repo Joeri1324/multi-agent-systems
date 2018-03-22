@@ -1,4 +1,4 @@
-__includes [ "utils.nls" ]
+;this is the version of our MAS system for assessment in the project (i.e. it is not optimised, but has various interesting features)
 extensions [array]
 
 buses-own [
@@ -107,7 +107,7 @@ to execute-actions
     
     ;acting on a message received from the boss / random movement (meaning the free mode buses will move to a chokepoint)
     if intention = "following orders" [ 
-      set long_term_path shortest-path bus_stop current_stop bus_stop desire
+      set long_term_path shortest-path current_stop desire
       ifelse length long_term_path = 1 [
         set intention "free movement"
         navigate
@@ -214,7 +214,7 @@ to move-along-route [ dummy_route_path ]
     ]
   ]  
   [
-    set long_term_path shortest-path bus_stop current_stop bus_stop one-of stops_involved_in_route
+    set long_term_path shortest-path current_stop one-of stops_involved_in_route
     set next_intended_stop item 1 long_term_path
   ]
 end
@@ -237,8 +237,8 @@ to-report destinations-that-should-be-on-bus
   let destinations_list []
   foreach n-values 24 [?] [
     let is_benefit false
-    let current_distance_from_destination length-of-path (shortest-path bus_stop current_stop bus_stop ?)
-    set distance_from_destination length-of-path (shortest-path bus_stop next_intended_stop bus_stop ?)
+    let current_distance_from_destination length-of-path (shortest-path current_stop ?)
+    set distance_from_destination length-of-path (shortest-path next_intended_stop ?)
     if distance_from_destination < current_distance_from_destination [ 
       set is_benefit true
     ]
@@ -300,7 +300,7 @@ to navigate
     let majority_destination calculate-preferred-next-destination current_stop
     
     if majority_destination != -1 and majority_destination != current_stop [ 
-      ;set long_term_path shortest-path (bus_stop current_stop) (bus_stop majority_destination) 
+      ;set long_term_path shortest-path current_stop majority_destination 
       ;set next_intended_stop (item 1 long_term_path)
       set next_intended_stop majority_destination
     ]
@@ -316,7 +316,7 @@ to navigate
         let stop_chosen choose-stop-by-probability adjusted_passenger_destinations
         set desire stop_chosen
         set intention "following orders"
-        set distance_from_destination length-of-path shortest-path bus_stop current_stop bus_stop desire
+        set distance_from_destination length-of-path shortest-path current_stop desire
         ;send-message 24 list current_stop desire
       ]
     ]
@@ -470,10 +470,10 @@ to-report votes-for-next-destination [current_stop_id]
   let possible_next_stops item current_stop_id graph
   foreach n-values 24 [?] [
     let destination ?
-    let current_min_distance length-of-path shortest-path bus_stop current_stop_id bus_stop destination
+    let current_min_distance length-of-path shortest-path current_stop_id destination
     let current_preferred_destination -1
     foreach possible_next_stops [
-      let new_distance length-of-path shortest-path bus_stop ? bus_stop destination
+      let new_distance length-of-path shortest-path ? destination
       if new_distance < current_min_distance [
         set current_min_distance new_distance
         set current_preferred_destination ?
@@ -568,4 +568,94 @@ to-report where-are-passengers-in-system-going
     set destinations (map + (where-are-passengers-at-stop-going ?) destinations)
   ]
   report destinations
+end
+
+to-report shortest-path [bs1 bs2]
+  if bs1 = bs2 [ 
+    report (list bs1)
+  ]
+  let backpointers item 0 (item bs1 distances)
+  let node_pointer bs2
+  let full_path []
+  set full_path lput bs2 full_path
+  while [array:item backpointers node_pointer != bs1] [
+    set node_pointer (array:item backpointers node_pointer)
+    set full_path lput node_pointer full_path
+  ]
+  set full_path lput bs1 full_path
+  report reverse full_path
+end
+
+to-report dijkstra [vertexFrom]
+  let Q  n-values 24 [?]
+  let S []
+  
+  let dist array:from-list n-values length graph [1000000] ; should be infinity but large number will work
+  let prev array:from-list n-values length graph [0] ;
+  
+  array:set dist vertexFrom 0
+  
+  while [length Q != 0] [
+    ; let l filter [not member? ? S] Q
+    ; print l
+    let v one-of Q
+    
+    foreach Q [ ; find lowest distance which is not visited yet
+      if array:item dist ? < array:item dist v [
+         set v ?
+      ]
+    ]
+    set Q remove v Q
+    ; set S lput v S ; add u to visited nodes
+    
+    let adjacent item v graph
+    foreach adjacent [
+      if (array:item dist v + get-distance ? v) < array:item dist ? [
+        array:set dist ? array:item dist v + get-distance ? v
+        array:set prev  ? v
+      ]
+    ]
+  ]
+ 
+  let result []
+  set result lput prev result
+  set result lput dist result
+  report result
+end
+
+;function which takes in a bus stop id and returns a list corresponding to how many passengers
+;at the bus stop want to go to each of the 24 destinations
+to-report where-are-passengers-at-stop-going [bs_id]
+  ;initialising the output list
+  let destinations []
+  repeat 24 [ set destinations lput 0 destinations ]
+  
+  ;getting a list of the passengers at the stop
+  let passenger_list get-passengers-at-stop bs_id
+  foreach passenger_list [ 
+    let passenger_destination item 1 ?
+    set destinations replace-item passenger_destination destinations ((item passenger_destination destinations) + 1)
+  ]
+  report destinations
+end
+
+;function which takes in a bus (the actual turtle) and returns a list corresponding to how many passengers
+;on the bus want to go to each of the 24 destinations
+to-report where-are-passengers-on-bus-going [bus]
+  let destinations []
+  repeat 24 [ set destinations lput 0 destinations ]
+  foreach bus_passengers [
+    let passenger_destination item 1 ?
+    set destinations replace-item passenger_destination destinations ((item passenger_destination destinations) + 1)
+  ]
+  report destinations
+end
+
+;path is represented as a list of bus_stop ids (e.g. [ 3 4 5 16 ])
+to-report length-of-path [ path ]
+  let pairwise_lengths []
+  foreach n-values (length path - 1) [?] [
+    set pairwise_lengths lput (get-distance item ? path item (? + 1) path) pairwise_lengths
+  ]
+  report sum pairwise_lengths
 end
