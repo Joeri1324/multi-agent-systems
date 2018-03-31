@@ -71,6 +71,10 @@ to init-buses
   ]
   
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
+  form-beliefs
+end
+
+to form-beliefs
   set graph [[22 15 14] [11 19 23 7] [8] [16 4 20 9] [3 5 10] [4 16 10 17] [8] [1 17 13] [2 6 9] [3 8 20] [4 5 17 13 21] [1 16 17] [20 15 22] [7 10 22 23] [0 23] [0 12 18] [3 5 11] [5 7 10 11] [15] [1 23] [3 9 12 21] [10 20 22] [0 12 13 21] [1 13 14 19]]
   set distances n-values length graph [dijkstra ?] 
 end
@@ -144,8 +148,12 @@ to execute-actions
   ]         
 end
 
-to-report get-destination[passenger_id]
-  report item 1 passenger_id
+to-report get-passenger-destination [ passenger ]
+  report item 1 passenger
+end
+
+to-report get-passenger-id [ passenger ]
+  report item 0 passenger
 end
 
 to pick-up-passengers
@@ -153,10 +161,10 @@ to pick-up-passengers
     set num_passengers_could_not_pick_up 0
     
     let votes_for_next_destination votes-for-next-destination current_stop
-    let bus_has_vacancy length bus_passengers != bus_size
     foreach passengers_here [
-      if (item (get-destination ?) votes_for_next_destination = next_intended_stop) and bus_has_vacancy [
-          pick-up-passenger item 0 ?
+      let bus_has_vacancy length bus_passengers != bus_size
+      if (item (get-passenger-destination ?) votes_for_next_destination = next_intended_stop) and bus_has_vacancy [
+          pick-up-passenger get-passenger-id ?
           set num_passengers_picked_up num_passengers_picked_up + 1
       ]
     ]
@@ -169,9 +177,9 @@ to pick-up-passengers
     ;picking up passengers who would benefit from getting on the bus
     set passengers_here get-passengers-at-stop current_stop
     foreach passengers_here [
-      if member? item 1 ? beneficial_destinations [
-        ifelse length bus_passengers != bus_size [
-          pick-up-passenger item 0 ?
+      if member? (get-passenger-destination ?) beneficial_destinations [
+        let bus_has_vacancy length bus_passengers != bus_size
+        ifelse bus_has_vacancy [
           set num_passengers_picked_up num_passengers_picked_up + 1
         ]
         [
@@ -195,12 +203,8 @@ end
 
 
 to move-along-route [ dummy_route_path ]
-  let stops_involved_in_route []
-  foreach n-values (length dummy_route_path) [?] [
-    if item ? dummy_route_path != [] [
-      set stops_involved_in_route lput ? stops_involved_in_route
-    ]
-  ]
+  
+  let stops_involved_in_route filter [length item ? dummy_route_path > 0] n-values (length dummy_route_path) [?]
   
   ifelse member? current_stop stops_involved_in_route [
     let next_stops item current_stop dummy_route_path
@@ -318,11 +322,15 @@ to navigate
     ]
 end
 
+to-report message-in-inbox
+  report length inbox > 0
+end
+
 ;__________________________________________________________________________________________________________________________________________
 ;CHOKEPOINT MESSAGING SYSTEM
 ;__________________________________________________________________________________________________________________________________________
 to act-on-message-from-boss
-  if length inbox > 0 [
+  if message-in-inbox [
     let last_message last inbox
     let time_sent item 0 last_message
     let sender item 1 last_message
@@ -347,22 +355,16 @@ end
 ;VOTING SYSTEM (METHODS FOR ADDING NEW BUSES)
 ;__________________________________________________________________________________________________________________________________________
 to make-new-buses
-  if bus_id = 24 [ 
-      if ticks <= 40 [ 
-        add-bus 2
-        set total_num_buses total_num_buses + 1
-      ]
+  if bus_id = 24 and ticks <= 40 [ 
+    add-bus 2
+    set total_num_buses total_num_buses + 1
   ]
 end
 
 to aggregate-vote
-  let recent_votes []
-  let special_votes []
+  let recent_votes ifelse-value message-in-inbox [filter [ item 0 ? = ticks - 1 ] inbox] [[]]
+  let special_votes ifelse-value message-in-inbox [filter [ item 2 ? = "special vote for new bus" ] recent_votes] [[]]
   if bus_id = 24 [
-    if length inbox > 0 [
-      set recent_votes filter [ item 0 ? = ticks - 1 ] inbox
-      set special_votes filter [ item 2 ? = "special vote for new bus" ] recent_votes
-    ]
     ifelse length special_votes >= (0.7 * (total_num_buses - 1)) and total_num_buses > 10 [
       show word "SPECIAL VOTE IN PROGRESS at time: " ticks
       repeat 10 [ 
@@ -399,9 +401,11 @@ end
 ;__________________________________________________________________________________________________________________________________________
 
 to-report choose-stop-by-probability [ passenger_list ]
+
   let total_number_of_passengers sum passenger_list
   let stop_chosen 3
   let random_number random total_number_of_passengers + 1  
+
   foreach n-values length passenger_list [?] [
     if random_number > 0 [
       set random_number random_number - item ? passenger_list
@@ -412,11 +416,7 @@ to-report choose-stop-by-probability [ passenger_list ]
 end
 
 to-report passengers-waiting-at-each-stop
-  let passengers_waiting_at_each_stop []
-  foreach n-values 24 [?] [
-    set passengers_waiting_at_each_stop lput list ? length get-passengers-at-stop ? passengers_waiting_at_each_stop
-  ]
-  report passengers_waiting_at_each_stop
+  report map [list ? length get-passengers-at-stop ?] n-values 24 [?]
 end
 
 to count-buses
@@ -427,6 +427,9 @@ end
 to-report votes-for-next-destination [current_stop_id]
   let votes []
   let possible_next_stops item current_stop_id graph
+  
+  show possible_next_stops
+
   foreach n-values 24 [?] [
     let destination ?
     let current_min_distance length-of-path shortest-path current_stop_id destination
@@ -438,37 +441,31 @@ to-report votes-for-next-destination [current_stop_id]
         set current_preferred_destination ?
       ]
     ]
-      set votes lput current_preferred_destination votes
+    set votes lput current_preferred_destination votes
   ]
   report votes
 end
 
 to-report calculate-preferred-next-destination [ current_stop_id ]
-  let preferred_next_destination -1
-  let counts n-values 24 [0]
-  let passengers_here get-passengers-at-stop current_stop_id
-  let votes_for_next_destination votes-for-next-destination current_stop_id
-  let possible_next_stops item current_stop_id graph
-  foreach passengers_here [
-    let destination item 1 ?
-    foreach possible_next_stops [
-      if item destination votes_for_next_destination = ? [
-        set counts replace-item ? counts (item ? counts + 1)
-      ]
-    ]
-  ]
-  if max counts != 0 [
-    set preferred_next_destination position (max counts) counts
-  ]
-  report preferred_next_destination
+  let votes votes-for-next-destination current_stop_id
+  let counts bincount map [item (get-passenger-destination ?) votes] (get-passengers-at-stop current_stop_id)
+  report ifelse-value (max counts != 0)
+    [position (max counts) counts]
+    [-1]
 end
 
+to-report element-wise-addition [list1 list2]
+  report map [item ? list1 + item ? list2] n-values length list1 [?]
+end
 
 to-report where-are-passengers-in-system-going
-  let destinations []
-  repeat 24 [ set destinations lput 1 destinations ]
-  foreach n-values 24 [?] [
-    set destinations (map + (where-are-passengers-at-stop-going ?) destinations)
+  report element-wise-addition reduce element-wise-addition n-values 24 [(where-are-passengers-at-stop-going ?)] n-values 24 [1]
+end
+
+to-report bincount [ passenger_list ]
+  let destinations n-values 24 [0]  
+  foreach passenger_list [
+    set destinations replace-item ? destinations (item ? destinations + 1)
   ]
   report destinations
 end
@@ -476,34 +473,18 @@ end
 ;function which takes in a bus stop id and returns a list corresponding to how many passengers
 ;at the bus stop want to go to each of the 24 destinations
 to-report where-are-passengers-at-stop-going [bs_id]
-  ;initialising the output list
-  let destinations []
-  repeat 24 [ set destinations lput 0 destinations ]
-  
-  ;getting a list of the passengers at the stop
-  let passenger_list get-passengers-at-stop bs_id
-  foreach passenger_list [ 
-    let passenger_destination item 1 ?
-    set destinations replace-item passenger_destination destinations ((item passenger_destination destinations) + 1)
-  ]
-  report destinations
+  report bincount (map get-passenger-destination get-passengers-at-stop bs_id)
 end
 
 ;function which takes in a bus (the actual turtle) and returns a list corresponding to how many passengers
 ;on the bus want to go to each of the 24 destinations
 to-report where-are-passengers-on-bus-going [bus]
-  let destinations []
-  repeat 24 [ set destinations lput 0 destinations ]
-  foreach bus_passengers [
-    let passenger_destination item 1 ?
-    set destinations replace-item passenger_destination destinations ((item passenger_destination destinations) + 1)
-  ]
-  report destinations
+  report bincount bus_passengers
 end
 
 to drop-off-correct-passengers
   foreach bus_passengers [ 
-      if item 1 ? = current_stop [ 
+      if get-passenger-destination ? = current_stop [ 
         drop-off-passenger item 0 ?
         set score score + 1
         set num_passengers_dropped_off num_passengers_dropped_off + 1
@@ -530,12 +511,13 @@ end
 ;BARGAINING SYSTEM
 ;__________________________________________________________________________________________________________________________________________
 
+
+; Does this do anything? 
 to initiate-bargaining
-  if bus_id = 24 [
-    if length inbox > 0 [
-      let recent_random_destinations filter [ item 0 ? >= ticks - 3 and is-list? item 2 ? ] inbox
-      let numbers_for_each_destination []
-      repeat 24 [ set numbers_for_each_destination lput [] numbers_for_each_destination ]
+  if (bus_id = 24) and (message-in-inbox) [
+    let recent_random_destinations filter [ item 0 ? >= ticks - 3 and is-list? item 2 ? ] inbox
+    let numbers_for_each_destination n-values 24 [[]]
+    ;show recent_random_destinations
       foreach recent_random_destinations [
         let sender item 1 ?
         let message_content item 2 ?
@@ -552,7 +534,6 @@ to initiate-bargaining
         ]
       ]
     ]
-  ]
 end
 
 to enter-into-negotiation
@@ -606,28 +587,27 @@ to-report shortest-path [bs1 bs2]
   report reverse full_path
 end
 
+; Implementation of shortest path algorithm by dijkstra
+; https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm
 to-report dijkstra [vertexFrom]
   let Q  n-values 24 [?]
   let S []
   
-  let dist array:from-list n-values length graph [1000000] ; should be infinity but large number will work
+  let dist array:from-list n-values length graph [1000000] 
   let prev array:from-list n-values length graph [0] ;
   
   array:set dist vertexFrom 0
   
   while [length Q != 0] [
-    ; let l filter [not member? ? S] Q
-    ; print l
+
     let v one-of Q
     
-    foreach Q [ ; find lowest distance which is not visited yet
+    foreach Q [ 
       if array:item dist ? < array:item dist v [
          set v ?
       ]
     ]
     set Q remove v Q
-    ; set S lput v S ; add u to visited nodes
-    
     let adjacent item v graph
     foreach adjacent [
       if (array:item dist v + get-distance ? v) < array:item dist ? [
@@ -645,9 +625,5 @@ end
 
 ;path is represented as a list of bus_stop ids (e.g. [ 3 4 5 16 ])
 to-report length-of-path [ path ]
-  let pairwise_lengths []
-  foreach n-values (length path - 1) [?] [
-    set pairwise_lengths lput (get-distance item ? path item (? + 1) path) pairwise_lengths
-  ]
-  report sum pairwise_lengths
+  report sum (map [get-distance item ?1 path item ?2 path] (n-values (length path - 1) [?]) (n-values (length path - 1) [? + 1]))
 end
