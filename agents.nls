@@ -88,10 +88,13 @@ to execute-actions
   
   ;sending message if there is a chokepoint in the system
   ;if bus_id = 24 [ send-message-as-boss ]
+  
+  ;initiating bargaining
   if bus_id = 24 [ initiate-bargaining ]
   
   ;checking if the bus is at a stop
   if current_stop >= 0 [ 
+    
     ;dropping off all passengers
     drop-off-all-passengers
     
@@ -417,16 +420,6 @@ to-report where-are-passengers-on-bus-going [bus]
   ]
   report destinations
 end
-
-;to drop-off-correct-passengers
-;  foreach bus_passengers [ 
-;      if item 1 ? = current_stop [ 
-;        drop-off-passenger item 0 ?
-;        set score score + 1
-;        set num_passengers_dropped_off num_passengers_dropped_off + 1
-;      ] 
-;  ]
-;end
 
 to-report destinations-that-should-be-on-bus
   let destinations_list []
