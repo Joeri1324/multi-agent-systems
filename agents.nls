@@ -67,7 +67,7 @@ to init-buses
   set route_path making-route
   
   foreach filter [? >= 24] n-values who [?] [
-    send-message ? "new bus"
+    send-message ? ["-inform-" "-(string) bus count update-" "new bus"]
   ]
   
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
@@ -308,7 +308,7 @@ to navigate
         set desire stop_chosen
         set intention "following orders"
         set distance_from_destination length-of-path shortest-path current_stop desire
-        send-message 24 list current_stop desire
+        send-message 24 lput list current_stop desire list "-inform-" "-(list) directions-" 
       ]
     ]
 end
@@ -339,7 +339,7 @@ to-report passengers-waiting-at-each-stop
 end
 
 to count-buses
-  set total_num_buses length filter [ item 2 ? = "new bus" ] inbox
+  set total_num_buses length filter [item 2 item 2 ? = "new bus"] inbox
   set total_num_buses total_num_buses + (who - 24 + 1)
 end
 
@@ -470,7 +470,7 @@ to send-message-as-boss
   let stop_chosen choose-stop-by-probability passengers_waiting_at_each_stop
   let total_number_of_passengers sum passengers_waiting_at_each_stop
   if total_number_of_passengers > 100 [
-    repeat 4 [ send-message 25 + random (total_num_buses - 1) stop_chosen ]
+    repeat 4 [ send-message 25 + random (total_num_buses - 1) lput stop_chosen list "-inform-" "-(int) chosen stop-" ]
   ]
 end
 
@@ -496,7 +496,7 @@ to aggregate-vote
   if bus_id = 24 [
     if length inbox > 0 [
       set recent_votes filter [ item 0 ? = ticks - 1 ] inbox
-      set special_votes filter [ item 2 ? = "special vote for new bus" ] recent_votes
+      set special_votes filter [item 2 item 2 ? = "special vote for new bus" ] recent_votes
     ]
     ifelse length special_votes >= floor (0.7 * (total_num_buses - 1)) and total_num_buses > 5 [
       show word "SPECIAL VOTE IN PROGRESS at time: " ticks
@@ -523,10 +523,10 @@ end
 
 to cast-vote
   if num_passengers_could_not_pick_up >= (0.05 * bus_size) and num_passengers_could_not_pick_up < bus_size and bus_id != 24 [
-    send-message 24 "vote for new bus"
+    send-message 24 ["-inform-" "-(string) cast vote-" "vote for new bus"]
   ]
   if num_passengers_could_not_pick_up > (0.5 * bus_size) and bus_id != 24 [
-    send-message 24 "special vote for new bus"
+    send-message 24 ["-inform-" "-(string) cast vote-" "special vote for new bus"]
   ]
 end
 
@@ -537,12 +537,12 @@ end
 to initiate-bargaining
   if bus_id = 24 [
     if length inbox > 0 [
-      let recent_random_destinations filter [ item 0 ? >= ticks - 3 and is-list? item 2 ? ] inbox
+      let recent_random_destinations filter [ item 0 ? >= ticks - 3 and  item 1 item 2 ? = "-(list) directions-"] inbox
       let numbers_for_each_destination []
       repeat 24 [ set numbers_for_each_destination lput [] numbers_for_each_destination ]
       foreach recent_random_destinations [
         let sender item 1 ?
-        let message_content item 2 ?
+        let message_content item 2 item 2 ?
         set numbers_for_each_destination replace-item (item 1 message_content) numbers_for_each_destination lput sender item (item 1 message_content) numbers_for_each_destination
       ]
       foreach numbers_for_each_destination [
@@ -550,7 +550,7 @@ to initiate-bargaining
         if length buses_in_negotiation > 1 [
           foreach buses_in_negotiation [
             if ? != 24 [
-              send-message ? buses_in_negotiation
+              send-message ? lput buses_in_negotiation list "-inform-" "-(int) buses in negotiation-" 
             ]
           ]
         ]
@@ -564,14 +564,14 @@ to enter-into-negotiation
   let buses_in_negotiation []
   foreach recent_messages [
     let sender item 1 ?
-    let message_content item 2 ?
+    let message_content item 2 item 2 ?
     if sender = 24 [
       set buses_in_negotiation message_content
     ]
   ]
   foreach buses_in_negotiation [
     if ? != bus_id [
-      send-message ? distance_from_destination
+      send-message ? lput distance_from_destination list "-inform-" "(int) distance from destination" 
     ]
   ]
 end
