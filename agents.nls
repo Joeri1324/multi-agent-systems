@@ -86,9 +86,6 @@ to execute-actions
   
   count-buses
   
-  ;sending message if there is a chokepoint in the system
-  ;if bus_id = 24 [ send-message-as-boss ]
-  
   ;initiating bargaining
   if bus_id = 24 [ initiate-bargaining ]
   
@@ -106,7 +103,6 @@ to execute-actions
     ;"free mode" buses fix their next stop in this way
     if mode = 1 and intention != "following orders" [ 
       navigate
-      ;act-on-message-from-boss
     ]
     
     ;acting on a message received from the boss / random movement (meaning the free mode buses will move to a chokepoint)
@@ -126,39 +122,13 @@ to execute-actions
       respond-to-negotiation
     ]
     
-    ;picking up passengers going to the majority destination
-    let passengers_here get-passengers-at-stop current_stop
     set num_passengers_could_not_pick_up 0
     
-    let votes_for_next_destination votes-for-next-destination current_stop
+    ;picking up the passengers who benefit most from going to where the bus is going next
+    pick-up-optimal-passengers
     
-    foreach passengers_here [
-      if item (item 1 ?) votes_for_next_destination = next_intended_stop [
-        if length bus_passengers != bus_size [
-          pick-up-passenger item 0 ?
-          set num_passengers_picked_up num_passengers_picked_up + 1
-        ]
-      ]
-    ]
-    
-    ;calculating beneficial destinations based on where the bus is going next
-    if next_intended_stop != -1 [
-      set beneficial_destinations destinations-that-should-be-on-bus
-    ]
-    
-    ;picking up passengers who would benefit from getting on the bus
-    set passengers_here get-passengers-at-stop current_stop
-    foreach passengers_here [
-      if member? item 1 ? beneficial_destinations [
-        ifelse length bus_passengers != bus_size [
-          pick-up-passenger item 0 ?
-          set num_passengers_picked_up num_passengers_picked_up + 1
-        ]
-        [
-          set num_passengers_could_not_pick_up (num_passengers_could_not_pick_up + 1)
-        ]
-      ]
-    ]
+    ;picking up the passengers who still benefit from going to where the bus is going next
+    pick-up-beneficial-passengers
     
     ;waiting for more passengers to arrive if not full yet
     if length bus_passengers < bus_size and intention = "free movement" [
@@ -448,29 +418,36 @@ to drop-off-all-passengers
   ]
 end
 
-
-;__________________________________________________________________________________________________________________________________________
-;CHOKEPOINT MESSAGING SYSTEM
-;__________________________________________________________________________________________________________________________________________
-to act-on-message-from-boss
-  if length inbox > 0 [
-    let last_message last inbox
-    let time_sent item 0 last_message
-    let sender item 1 last_message
-    let message_content item 2 last_message
-    if sender = 24 and ticks - time_sent < 2 and bus_id != 24 [
-      set intention "following orders"
-      set desire message_content
+to pick-up-optimal-passengers
+  let votes_for_next_destination votes-for-next-destination current_stop
+  let passengers_here get-passengers-at-stop current_stop
+  foreach passengers_here [
+    if item (item 1 ?) votes_for_next_destination = next_intended_stop [
+      if length bus_passengers != bus_size [
+        pick-up-passenger item 0 ?
+        set num_passengers_picked_up num_passengers_picked_up + 1
+      ]
     ]
   ]
 end
 
-to send-message-as-boss
-  let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
-  let stop_chosen choose-stop-by-probability passengers_waiting_at_each_stop
-  let total_number_of_passengers sum passengers_waiting_at_each_stop
-  if total_number_of_passengers > 100 [
-    repeat 4 [ send-message 25 + random (total_num_buses - 1) lput stop_chosen list "-inform-" "-(int) chosen stop-" ]
+to pick-up-beneficial-passengers
+;calculating beneficial destinations based on where the bus is going next
+  if next_intended_stop != -1 [
+    set beneficial_destinations destinations-that-should-be-on-bus
+  ]
+  ;picking up passengers who would benefit from getting on the bus
+  let passengers_here get-passengers-at-stop current_stop
+  foreach passengers_here [
+    if member? item 1 ? beneficial_destinations [
+      ifelse length bus_passengers != bus_size [
+        pick-up-passenger item 0 ?
+        set num_passengers_picked_up num_passengers_picked_up + 1
+      ]
+      [
+        set num_passengers_could_not_pick_up (num_passengers_could_not_pick_up + 1)
+      ]
+    ]
   ]
 end
 
