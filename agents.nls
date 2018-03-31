@@ -79,7 +79,6 @@ end
 ;MAIN FUNCTION
 ;-------------------------------------------------------------------------------------------------------------------------
 
-
 to execute-actions  
   ;adding new buses at time intervals 
   make-new-buses
@@ -96,10 +95,7 @@ to execute-actions
     drop-off-correct-passengers
     
     ;dropping off all passengers
-    foreach bus_passengers [ 
-      drop-off-passenger item 0 ?
-      set num_passengers_dropped_off num_passengers_dropped_off + 1
-    ]
+    drop-off-all-passengers
     
     ;routed buses fix their next stop in this way
     if mode = 0 [
@@ -130,17 +126,38 @@ to execute-actions
     ]
     
     ;picking up passengers going to the majority destination
-    let passengers_here get-passengers-at-stop current_stop
+    pick-up-passengers
+    if length bus_passengers < bus_size and intention = "free movement" [
+      if ticks mod 15 >= 13 [
+        set next_intended_stop -1
+      ]
+    ]
+  ] 
+  
+  if ticks mod 10 = 0 [ cast-vote ]
+  aggregate-vote
+  
+  if next_intended_stop != -1
+  [
+  ;travelling to the next stop
+  travel-to next_intended_stop
+  ]         
+end
+
+to-report get-destination[passenger_id]
+  report item 1 passenger_id
+end
+
+to pick-up-passengers
+  let passengers_here get-passengers-at-stop current_stop
     set num_passengers_could_not_pick_up 0
     
     let votes_for_next_destination votes-for-next-destination current_stop
-    
+    let bus_has_vacancy length bus_passengers != bus_size
     foreach passengers_here [
-      if item (item 1 ?) votes_for_next_destination = next_intended_stop [
-        if length bus_passengers != bus_size [
+      if (item (get-destination ?) votes_for_next_destination = next_intended_stop) and bus_has_vacancy [
           pick-up-passenger item 0 ?
           set num_passengers_picked_up num_passengers_picked_up + 1
-        ]
       ]
     ]
     
@@ -162,21 +179,14 @@ to execute-actions
         ]
       ]
     ]
-    if length bus_passengers < bus_size and intention = "free movement" [
-      if ticks mod 15 >= 13 [
-        set next_intended_stop -1
-      ]
-    ]
-  ] 
-  
-  if ticks mod 10 = 0 [ cast-vote ]
-  aggregate-vote
-  
-  if next_intended_stop != -1
-  [
-  ;travelling to the next stop
-  travel-to next_intended_stop
-  ]         
+end
+
+to drop-off-all-passengers
+  ;dropping off all passengers
+  foreach bus_passengers [ 
+    drop-off-passenger item 0 ?
+    set num_passengers_dropped_off num_passengers_dropped_off + 1
+  ]
 end
 
 ;_________________________________________________________________________________________________
@@ -435,8 +445,7 @@ end
 
 to-report calculate-preferred-next-destination [ current_stop_id ]
   let preferred_next_destination -1
-  let counts []
-  repeat 24 [ set counts lput 0 counts ]
+  let counts n-values 24 [0]
   let passengers_here get-passengers-at-stop current_stop_id
   let votes_for_next_destination votes-for-next-destination current_stop_id
   let possible_next_stops item current_stop_id graph
