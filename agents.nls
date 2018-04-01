@@ -369,20 +369,10 @@ to-report where-are-passengers-on-bus-going [bus]
   report bincount bus_passengers
 end
 
+; reports list of bus stops that passengers would befefit from considering their
+; desired destination.
 to-report destinations-that-should-be-on-bus
-  let destinations_list []
-  foreach n-values 24 [?] [
-    let is_benefit false
-    let current_distance_from_destination length-of-path (shortest-path current_stop ?)
-    set distance_from_destination length-of-path (shortest-path next_intended_stop ?)
-    if distance_from_destination < current_distance_from_destination [ 
-      set is_benefit true
-    ]
-    if is_benefit [ 
-      set destinations_list lput ? destinations_list
-    ]
-  ]
-  report destinations_list
+  report filter [? != false] map [ifelse-value (length-of-path (shortest-path current_stop ?) > length-of-path (shortest-path next_intended_stop ?)) [?] [false]] n-values 24 [?]
 end
 
 ;__________________________________________________________________________________________________________________________________________
@@ -400,11 +390,9 @@ to pick-up-optimal-passengers
   let votes_for_next_destination votes-for-next-destination current_stop
   let passengers_here get-passengers-at-stop current_stop
   foreach passengers_here [
-    if item (item 1 ?) votes_for_next_destination = next_intended_stop [
-      if length bus_passengers != bus_size [
-        pick-up-passenger item 0 ?
-        set num_passengers_picked_up num_passengers_picked_up + 1
-      ]
+    if (item (item 1 ?) votes_for_next_destination = next_intended_stop) and (length bus_passengers != bus_size) [
+      pick-up-passenger item 0 ?
+      set num_passengers_picked_up num_passengers_picked_up + 1
     ]
   ]
 end
