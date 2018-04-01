@@ -53,7 +53,9 @@ to init-buses
   set num_passengers_picked_up 0
   set mode 1
   
-  ifelse ticks >= 2 and ticks <= 10 [ set mode 0 ][ set mode 1 ]
+  ;ifelse ticks >= 2 and ticks <= 10 [ set mode 0 ][ set mode 1 ]
+  
+  set mode 1
   ifelse mode = 1 [ set intention "free movement" ][ set intention "routed" ]
   if ticks = 2 [ set route_type 0 ]
   if ticks = 3 [ set route_type 1 ]
@@ -103,6 +105,7 @@ to execute-actions
     
     ;routed buses fix their next stop in this way
     if mode = 0 [
+      show "YESS"
       move-along-route route_path
     ]
     
@@ -306,20 +309,24 @@ to navigate
     ]
     
     ;occasionally heading to a busy stop (weighted by passenger count)
-    if random 8 = 0 [
-      let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
-      let passenger_destinations_in_system where-are-passengers-in-system-going
-      set passenger_destinations_in_system (map [? / 2] passenger_destinations_in_system)
-      let adjusted_passenger_destinations (map / passengers_waiting_at_each_stop passenger_destinations_in_system)
-      set adjusted_passenger_destinations map ceiling adjusted_passenger_destinations
-      if max passengers_waiting_at_each_stop != 0 [
-        let stop_chosen choose-stop-by-probability adjusted_passenger_destinations
-        set desire stop_chosen
-        set intention "following orders"
-        set distance_from_destination length-of-path shortest-path current_stop desire
-        ;send-message 24 list current_stop desire
-      ]
+    maby-head-to-busy-stop
+end
+
+to maby-head-to-busy-stop
+  if random 8 = 0 [
+    let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
+    let passenger_destinations_in_system where-are-passengers-in-system-going
+    set passenger_destinations_in_system (map [? / 2] passenger_destinations_in_system)
+    let adjusted_passenger_destinations (map / passengers_waiting_at_each_stop passenger_destinations_in_system)
+    set adjusted_passenger_destinations map ceiling adjusted_passenger_destinations
+    if max passengers_waiting_at_each_stop != 0 [
+      let stop_chosen choose-stop-by-probability adjusted_passenger_destinations
+      set desire stop_chosen
+      set intention "following orders"
+      set distance_from_destination length-of-path shortest-path current_stop desire
+      ;send-message 24 list current_stop desire
     ]
+  ]
 end
 
 to-report message-in-inbox
@@ -428,7 +435,6 @@ to-report votes-for-next-destination [current_stop_id]
   let votes []
   let possible_next_stops item current_stop_id graph
   
-  show possible_next_stops
 
   foreach n-values 24 [?] [
     let destination ?
@@ -484,11 +490,11 @@ end
 
 to drop-off-correct-passengers
   foreach bus_passengers [ 
-      if get-passenger-destination ? = current_stop [ 
-        drop-off-passenger item 0 ?
-        set score score + 1
-        set num_passengers_dropped_off num_passengers_dropped_off + 1
-      ] 
+    if get-passenger-destination ? = current_stop [ 
+      drop-off-passenger item 0 ?
+      set score score + 1
+      set num_passengers_dropped_off num_passengers_dropped_off + 1
+    ] 
   ]
 end
 
@@ -516,6 +522,7 @@ end
 to initiate-bargaining
   if (bus_id = 24) and (message-in-inbox) [
     let recent_random_destinations filter [ item 0 ? >= ticks - 3 and is-list? item 2 ? ] inbox
+    show recent_random_destinations
     let numbers_for_each_destination n-values 24 [[]]
     ;show recent_random_destinations
       foreach recent_random_destinations [
@@ -571,6 +578,10 @@ end
 ;SHORTEST PATH ALGORITHM
 ;__________________________________________________________________________________________________________________________________________
 
+; looks up the shortest path in the distances where the result
+; of running dijkstra algorithm on the entire graph is stored
+; iterates on the backpointer array reveresly to form the 
+; shortest path and returns it.
 to-report shortest-path [bs1 bs2]
   if bs1 = bs2 [ 
     report (list bs1)
@@ -599,9 +610,7 @@ to-report dijkstra [vertexFrom]
   array:set dist vertexFrom 0
   
   while [length Q != 0] [
-
     let v one-of Q
-    
     foreach Q [ 
       if array:item dist ? < array:item dist v [
          set v ?
@@ -612,7 +621,7 @@ to-report dijkstra [vertexFrom]
     foreach adjacent [
       if (array:item dist v + get-distance ? v) < array:item dist ? [
         array:set dist ? array:item dist v + get-distance ? v
-        array:set prev  ? v
+        array:set prev ? v
       ]
     ]
   ]
