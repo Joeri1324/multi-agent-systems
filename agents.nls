@@ -30,9 +30,6 @@ buses-own [
   route_type; indexes which route (not strictly needed, but often easier than writing out the full route)
   route_path; if on route, specific route it follows
   mode; indexes whether on route or on free travel mode
-  score; number of passengers the bus has dropped off at their final destination
-  num_passengers_dropped_off; number of passengers dropped off in total
-  num_passengers_picked_up; number of passengers picked up in total
   num_passengers_could_not_pick_up
   total_num_buses
   distance_from_destination ;used for negotiations/argumentation
@@ -47,10 +44,6 @@ to init-buses
   set next_intended_stop -1
   set beneficial_destinations []
   set total_num_buses 1
-  
-  set num_passengers_dropped_off 0
-  set score 0
-  set num_passengers_picked_up 0
   set mode 1
   
   if ticks = 2 [ set mode 0 ]
@@ -260,10 +253,10 @@ to navigate
     ]
     
     ;occasionally heading to a busy stop (weighted by passenger count)
-    maby-head-to-busy-stop
+    maybe-head-to-busy-stop
 end
 
-to maby-head-to-busy-stop
+to maybe-head-to-busy-stop
   if random 8 = 0 [
     let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
     let passenger_destinations_in_system where-are-passengers-in-system-going
@@ -275,7 +268,7 @@ to maby-head-to-busy-stop
       set desire stop_chosen
       set intention "following orders"
       set distance_from_destination length-of-path shortest-path current_stop desire
-      ;send-message 24 list current_stop desire
+      send-message 24 lput list current_stop desire list "-inform-" "-(list) directions-"
     ]
   ]
 end
@@ -382,7 +375,6 @@ end
 to drop-off-all-passengers
   foreach bus_passengers [ 
     drop-off-passenger item 0 ?
-    set num_passengers_dropped_off num_passengers_dropped_off + 1
   ]
 end
 
@@ -392,23 +384,25 @@ to pick-up-optimal-passengers
   foreach passengers_here [
     if (item (get-passenger-destination ?) votes_for_next_destination = next_intended_stop) and (length bus_passengers != bus_size) [
       pick-up-passenger get-passenger-id ?
-      set num_passengers_picked_up num_passengers_picked_up + 1
     ]
   ]
 end
 
 to pick-up-beneficial-passengers
-
+;calculating beneficial destinations based on where the bus is going next
+  if next_intended_stop != -1 [
+    set beneficial_destinations destinations-that-should-be-on-bus
+  ]
   ;picking up passengers who would benefit from getting on the bus
-  let passengers_that_should_get_on_bus filter [member? (get-passenger-id ?) beneficial_destinations] (get-passengers-at-stop current_stop)
-  
-  foreach passengers_that_should_get_on_bus [
-    ifelse length bus_passengers != bus_size [
-      pick-up-passenger get-passenger-id ?
-      set num_passengers_picked_up num_passengers_picked_up + 1
-    ]
-    [
-      set num_passengers_could_not_pick_up (num_passengers_could_not_pick_up + 1)
+  let passengers_here get-passengers-at-stop current_stop
+  foreach passengers_here [
+    if member? item 1 ? beneficial_destinations [
+      ifelse length bus_passengers != bus_size [
+        pick-up-passenger item 0 ?
+      ]
+      [
+        set num_passengers_could_not_pick_up (num_passengers_could_not_pick_up + 1)
+      ]
     ]
   ]
 end
@@ -461,7 +455,7 @@ to aggregate-vote
 end
 
 to cast-vote
-  if num_passengers_could_not_pick_up >= (0.05 * bus_size) and num_passengers_could_not_pick_up < bus_size and bus_id != 24 [
+  if num_passengers_could_not_pick_up >= (0.05 * bus_size) and bus_id != 24 [
     send-message 24 ["-inform-" "-(string) cast vote-" "vote for new bus"]
   ]
   if num_passengers_could_not_pick_up > (0.5 * bus_size) and bus_id != 24 [
