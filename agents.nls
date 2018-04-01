@@ -301,11 +301,7 @@ to-report choose-stop-by-probability [ passenger_list ]
 end
 
 to-report passengers-waiting-at-each-stop
-  let passengers_waiting_at_each_stop []
-  foreach n-values 24 [?] [
-    set passengers_waiting_at_each_stop lput list ? length get-passengers-at-stop ? passengers_waiting_at_each_stop
-  ]
-  report passengers_waiting_at_each_stop
+  report map [list ? length get-passengers-at-stop ?] n-values 24 [?]
 end
 
 to count-buses
