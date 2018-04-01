@@ -139,7 +139,7 @@ to execute-actions
   ] 
   
   ;voting for a new bus every 10 ticks
-  if ticks mod 10 = 0 [ cast-vote ]
+  if ticks mod 15 = 14 [ cast-vote ]
   
   ;aggregator bus checks every tick to see if vote is successful
   aggregate-vote
@@ -475,11 +475,13 @@ to aggregate-vote
       set recent_votes filter [ item 0 ? = ticks - 1 ] inbox
       set special_votes filter [item 2 item 2 ? = "special vote for new bus" ] recent_votes
     ]
-    ifelse length special_votes >= floor (0.7 * (total_num_buses - 1)) and total_num_buses > 5 [
+    let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
+    let num_passengers_in_system sum passengers_waiting_at_each_stop
+    ifelse length special_votes >= floor (0.5 * (total_num_buses - 1)) and total_num_buses > 5 [
       show word "SPECIAL VOTE IN PROGRESS at time: " ticks
-      repeat 10 [ 
-        if random 1440 > ticks [ 
-          add-bus 2
+      repeat 5 * floor (num_passengers_in_system / (total_num_buses * 60)) [ 
+        if random 1440 > ticks + 200 [ 
+          add-bus 3
           show "SYSTEM AT HIGH CAPACITY: adding new big bus"
         ]
       ]
@@ -487,8 +489,8 @@ to aggregate-vote
     [
       if length recent_votes >= floor (0.5 * (total_num_buses - 1)) and total_num_buses > 5 [
         show word "NORMAL VOTE IN PROGRESS at time: " ticks
-        repeat 5 [ 
-          if random 1440 > ticks [ 
+        repeat 5 * floor (num_passengers_in_system / (total_num_buses * 60)) [ 
+          if random 1440 > ticks + 200 [ 
             add-bus 2
             show "SYSTEM AT CAPACITY: adding new bus"
           ]
