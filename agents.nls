@@ -131,7 +131,7 @@ to execute-actions
     pick-up-beneficial-passengers
     
     ;waiting for more passengers to arrive if not full yet
-    if length bus_passengers < bus_size and intention = "free movement" [
+    if length bus_passengers < (bus_size * 0.9) and intention = "free movement" [
       if ticks mod 15 >= 13 [
         set next_intended_stop -1
       ]
@@ -562,7 +562,9 @@ to respond-to-negotiation
     foreach recent_messages [
       set distances_of_negotiators lput item 2 ? distances_of_negotiators
     ]
-    if max distances_of_negotiators < distance_from_destination [
+    let num_passengers_at_stop length get-passengers-at-stop last long_term_path
+    let num_negotiators length distances_of_negotiators
+    if max distances_of_negotiators < distance_from_destination and num_passengers_at_stop < (num_negotiators * 60) [
       set intention "free movement"
       navigate
     ]
