@@ -591,32 +591,30 @@ to-report shortest-path [bs1 bs2]
   report reverse full_path
 end
 
+; Implementation of shortest path algorithm by dijkstra
+; https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm
 to-report dijkstra [vertexFrom]
   let Q  n-values 24 [?]
   let S []
   
-  let dist array:from-list n-values length graph [1000000] ; should be infinity but large number will work
+  let dist array:from-list n-values length graph [1000000] 
   let prev array:from-list n-values length graph [0] ;
   
   array:set dist vertexFrom 0
   
   while [length Q != 0] [
-    ; let l filter [not member? ? S] Q
-    ; print l
     let v one-of Q
-    
-    foreach Q [ ; find lowest distance which is not visited yet
+    foreach Q [ 
       if array:item dist ? < array:item dist v [
          set v ?
       ]
     ]
-    set Q remove v Q ; set S lput v S ; add u to visited nodes
-    
+    set Q remove v Q
     let adjacent item v graph
     foreach adjacent [
       if (array:item dist v + get-distance ? v) < array:item dist ? [
         array:set dist ? array:item dist v + get-distance ? v
-        array:set prev  ? v
+        array:set prev ? v
       ]
     ]
   ]
