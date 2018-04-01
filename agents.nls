@@ -398,10 +398,7 @@ to pick-up-optimal-passengers
 end
 
 to pick-up-beneficial-passengers
-;calculating beneficial destinations based on where the bus is going next
-  if next_intended_stop != -1 [
-    set beneficial_destinations destinations-that-should-be-on-bus
-  ]
+
   ;picking up passengers who would benefit from getting on the bus
   let passengers_that_should_get_on_bus filter [member? (get-passenger-id ?) beneficial_destinations] (get-passengers-at-stop current_stop)
   
@@ -420,15 +417,13 @@ end
 ;VOTING SYSTEM (METHODS FOR ADDING NEW BUSES)
 ;__________________________________________________________________________________________________________________________________________
 to make-new-buses
-  if bus_id = 24 [ 
-      if ticks <= 10 and ticks != 2 [ 
-        add-bus 2
-        set total_num_buses total_num_buses + 1
-      ]
-      if ticks = 2 [
-        add-bus 3
-        set total_num_buses total_num_buses + 1
-      ]
+  if bus_id = 24 and ticks <= 10 and ticks != 2 [ 
+    add-bus 2
+    set total_num_buses total_num_buses + 1
+  ]
+  if bus_id = 24 and ticks = 2 [
+    add-bus 3
+    set total_num_buses total_num_buses + 1
   ]
 end
 
