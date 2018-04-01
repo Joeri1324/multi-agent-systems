@@ -56,14 +56,7 @@ to init-buses
   if ticks = 2 [ set mode 0 ]
   ifelse mode = 1 [ set intention "free movement" ][ set intention "routed" ]
   if ticks = 2 [ set route_type 0 ]
-;  if ticks = 3 [ set route_type 1 ]
-;  if ticks = 4 [ set route_type 2 ]
-;  if ticks = 5 [ set route_type 3 ]
-;  if ticks = 6 [ set route_type 4 ]
-;  if ticks = 7 [ set route_type 5 ]
-;  if ticks = 8 [ set route_type 6 ]
-;  if ticks = 9 [ set route_type 7 ]
-;  if ticks = 10 [ set route_type 0 ]
+
   set route_path making-route
   
   foreach filter [? >= 24] n-values who [?] [
