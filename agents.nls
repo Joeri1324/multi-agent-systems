@@ -390,8 +390,8 @@ to pick-up-optimal-passengers
   let votes_for_next_destination votes-for-next-destination current_stop
   let passengers_here get-passengers-at-stop current_stop
   foreach passengers_here [
-    if (item (item 1 ?) votes_for_next_destination = next_intended_stop) and (length bus_passengers != bus_size) [
-      pick-up-passenger item 0 ?
+    if (item (get-passenger-destination ?) votes_for_next_destination = next_intended_stop) and (length bus_passengers != bus_size) [
+      pick-up-passenger get-passenger-id ?
       set num_passengers_picked_up num_passengers_picked_up + 1
     ]
   ]
@@ -403,16 +403,15 @@ to pick-up-beneficial-passengers
     set beneficial_destinations destinations-that-should-be-on-bus
   ]
   ;picking up passengers who would benefit from getting on the bus
-  let passengers_here get-passengers-at-stop current_stop
-  foreach passengers_here [
-    if member? item 1 ? beneficial_destinations [
-      ifelse length bus_passengers != bus_size [
-        pick-up-passenger item 0 ?
-        set num_passengers_picked_up num_passengers_picked_up + 1
-      ]
-      [
-        set num_passengers_could_not_pick_up (num_passengers_could_not_pick_up + 1)
-      ]
+  let passengers_that_should_get_on_bus filter [member? (get-passenger-id ?) beneficial_destinations] (get-passengers-at-stop current_stop)
+  
+  foreach passengers_that_should_get_on_bus [
+    ifelse length bus_passengers != bus_size [
+      pick-up-passenger get-passenger-id ?
+      set num_passengers_picked_up num_passengers_picked_up + 1
+    ]
+    [
+      set num_passengers_could_not_pick_up (num_passengers_could_not_pick_up + 1)
     ]
   ]
 end
