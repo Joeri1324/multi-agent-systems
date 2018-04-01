@@ -53,21 +53,21 @@ to init-buses
   set num_passengers_picked_up 0
   set mode 1
   
-  ifelse ticks >= 2 and ticks <= 10 [ set mode 0 ][ set mode 1 ]
+  if ticks = 2 [ set mode 0 ]
   ifelse mode = 1 [ set intention "free movement" ][ set intention "routed" ]
   if ticks = 2 [ set route_type 0 ]
-  if ticks = 3 [ set route_type 1 ]
-  if ticks = 4 [ set route_type 2 ]
-  if ticks = 5 [ set route_type 3 ]
-  if ticks = 6 [ set route_type 4 ]
-  if ticks = 7 [ set route_type 5 ]
-  if ticks = 8 [ set route_type 6 ]
-  if ticks = 9 [ set route_type 7 ]
-  if ticks = 10 [ set route_type 0 ]
+;  if ticks = 3 [ set route_type 1 ]
+;  if ticks = 4 [ set route_type 2 ]
+;  if ticks = 5 [ set route_type 3 ]
+;  if ticks = 6 [ set route_type 4 ]
+;  if ticks = 7 [ set route_type 5 ]
+;  if ticks = 8 [ set route_type 6 ]
+;  if ticks = 9 [ set route_type 7 ]
+;  if ticks = 10 [ set route_type 0 ]
   set route_path making-route
   
   foreach filter [? >= 24] n-values who [?] [
-    send-message ? "new bus"
+    send-message ? ["-inform-" "-(string) bus count update-" "new bus"]
   ]
   
   ; This list contains the topology of the entire network of bus stops, which is known to all agents. You can use this, for instance, to calculate the shortest path between two bus stops.
@@ -86,20 +86,14 @@ to execute-actions
   
   count-buses
   
-  ;sending message if there is a chokepoint in the system
-  if bus_id = 24 [ send-message-as-boss ]
+  ;initiating bargaining
   if bus_id = 24 [ initiate-bargaining ]
   
   ;checking if the bus is at a stop
   if current_stop >= 0 [ 
-    ;dropping off any passengers who want to be at the stop
-    drop-off-correct-passengers
     
     ;dropping off all passengers
-    foreach bus_passengers [ 
-      drop-off-passenger item 0 ?
-      set num_passengers_dropped_off num_passengers_dropped_off + 1
-    ]
+    drop-off-all-passengers
     
     ;routed buses fix their next stop in this way
     if mode = 0 [
@@ -109,7 +103,6 @@ to execute-actions
     ;"free mode" buses fix their next stop in this way
     if mode = 1 and intention != "following orders" [ 
       navigate
-      act-on-message-from-boss
     ]
     
     ;acting on a message received from the boss / random movement (meaning the free mode buses will move to a chokepoint)
@@ -129,52 +122,31 @@ to execute-actions
       respond-to-negotiation
     ]
     
-    ;picking up passengers going to the majority destination
-    let passengers_here get-passengers-at-stop current_stop
     set num_passengers_could_not_pick_up 0
     
-    let votes_for_next_destination votes-for-next-destination current_stop
+    ;picking up the passengers who benefit most from going to where the bus is going next
+    pick-up-optimal-passengers
     
-    foreach passengers_here [
-      if item (item 1 ?) votes_for_next_destination = next_intended_stop [
-        if length bus_passengers != bus_size [
-          pick-up-passenger item 0 ?
-          set num_passengers_picked_up num_passengers_picked_up + 1
-        ]
-      ]
-    ]
+    ;picking up the passengers who still benefit from going to where the bus is going next
+    pick-up-beneficial-passengers
     
-    if next_intended_stop != -1 [
-      ;calculating based on where the bus is going next
-      set beneficial_destinations destinations-that-should-be-on-bus
-    ]
-    
-    ;picking up passengers who would benefit from getting on the bus
-    set passengers_here get-passengers-at-stop current_stop
-    foreach passengers_here [
-      if member? item 1 ? beneficial_destinations [
-        ifelse length bus_passengers != bus_size [
-          pick-up-passenger item 0 ?
-          set num_passengers_picked_up num_passengers_picked_up + 1
-        ]
-        [
-          set num_passengers_could_not_pick_up (num_passengers_could_not_pick_up + 1)
-        ]
-      ]
-    ]
-    if length bus_passengers < bus_size and intention = "free movement" [
+    ;waiting for more passengers to arrive if not full yet
+    if length bus_passengers < (bus_size * 0.9) and intention = "free movement" [
       if ticks mod 15 >= 13 [
         set next_intended_stop -1
       ]
     ]
   ] 
   
-  if ticks mod 10 = 0 [ cast-vote ]
+  ;voting for a new bus every 10 ticks
+  if ticks mod 15 = 14 [ cast-vote ]
+  
+  ;aggregator bus checks every tick to see if vote is successful
   aggregate-vote
   
+  ;travelling to the next stop, if there is one
   if next_intended_stop != -1
   [
-  ;travelling to the next stop
   travel-to next_intended_stop
   ]         
 end
@@ -183,7 +155,7 @@ end
 ;NAVIGATION FOR ROUTES
 ;_________________________________________________________________________________________________
 
-
+;this function determines how buses on routes behave
 to move-along-route [ dummy_route_path ]
   let stops_involved_in_route []
   foreach n-values (length dummy_route_path) [?] [
@@ -226,6 +198,8 @@ to move-along-route [ dummy_route_path ]
   ]
 end
 
+;this function makes a route based on a route type (this could be done directly, but this way makes it more customizable)
+;note: a route is represented as a list of lists of possible next stops for each stop involved in the route
 to-report making-route
   set route_path []
   repeat 24 [ set route_path lput [] route_path ]
@@ -261,6 +235,7 @@ end
 ;NAVIGATION FOR FREE MODE
 ;________________________________________________________________________________________________
 
+;this procedure is the most important component of the MAS. It determines where buses move.
 to navigate
     ;getting a list of the possible next stops
     let possible_next_stops item current_stop graph
@@ -303,87 +278,11 @@ to navigate
         set desire stop_chosen
         set intention "following orders"
         set distance_from_destination length-of-path shortest-path current_stop desire
-        ;send-message 24 list current_stop desire
+        send-message 24 lput list current_stop desire list "-inform-" "-(list) directions-" 
       ]
     ]
 end
 
-;__________________________________________________________________________________________________________________________________________
-;CHOKEPOINT MESSAGING SYSTEM
-;__________________________________________________________________________________________________________________________________________
-to act-on-message-from-boss
-  if length inbox > 0 [
-    let last_message last inbox
-    let time_sent item 0 last_message
-    let sender item 1 last_message
-    let message_content item 2 last_message
-    if sender = 24 and ticks - time_sent < 2 and bus_id != 24 [
-      set intention "following orders"
-      set desire message_content
-    ]
-  ]
-end
-
-to send-message-as-boss
-  let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
-  let stop_chosen choose-stop-by-probability passengers_waiting_at_each_stop
-  let total_number_of_passengers sum passengers_waiting_at_each_stop
-  if total_number_of_passengers > 100 [
-    repeat 4 [ send-message 25 + random (total_num_buses - 1) stop_chosen ]
-  ]
-end
-
-;__________________________________________________________________________________________________________________________________________
-;VOTING SYSTEM (METHODS FOR ADDING NEW BUSES)
-;__________________________________________________________________________________________________________________________________________
-to make-new-buses
-  if bus_id = 24 [ 
-      if ticks <= 40 [ 
-        add-bus 2
-        set total_num_buses total_num_buses + 1
-      ]
-  ]
-end
-
-to aggregate-vote
-  let recent_votes []
-  let special_votes []
-  if bus_id = 24 [
-    if length inbox > 0 [
-      set recent_votes filter [ item 0 ? = ticks - 1 ] inbox
-      set special_votes filter [ item 2 ? = "special vote for new bus" ] recent_votes
-    ]
-    ifelse length special_votes >= (0.7 * (total_num_buses - 1)) and total_num_buses > 10 [
-      show word "SPECIAL VOTE IN PROGRESS at time: " ticks
-      repeat 10 [ 
-        if random 1440 > ticks [ 
-          add-bus 2
-          show "SYSTEM AT HIGH CAPACITY: adding new big bus"
-        ]
-      ]
-    ]
-    [
-      if length recent_votes >= (0.5 * (total_num_buses - 1)) and total_num_buses > 10 [
-        show word "NORMAL VOTE IN PROGRESS at time: " ticks
-        repeat 5 [ 
-          if random 1440 > ticks [ 
-            add-bus 2
-            show "SYSTEM AT CAPACITY: adding new bus"
-          ]
-        ]
-      ]
-    ]
-  ]
-end
-
-to cast-vote
-  if num_passengers_could_not_pick_up >= (0.3 * bus_size) and num_passengers_could_not_pick_up < bus_size and bus_id != 24 [
-    send-message 24 "vote for new bus"
-  ]
-  if num_passengers_could_not_pick_up > (0.8 * bus_size) and bus_id != 24 [
-    send-message 24 "special vote for new bus"
-  ]
-end
 ;__________________________________________________________________________________________________________________________________________
 ;FREE MODE NAVIGATION UTILS
 ;__________________________________________________________________________________________________________________________________________
@@ -410,7 +309,7 @@ to-report passengers-waiting-at-each-stop
 end
 
 to count-buses
-  set total_num_buses length filter [ item 2 ? = "new bus" ] inbox
+  set total_num_buses length filter [item 2 item 2 ? = "new bus"] inbox
   set total_num_buses total_num_buses + (who - 24 + 1)
 end
 
@@ -492,16 +391,6 @@ to-report where-are-passengers-on-bus-going [bus]
   report destinations
 end
 
-to drop-off-correct-passengers
-  foreach bus_passengers [ 
-      if item 1 ? = current_stop [ 
-        drop-off-passenger item 0 ?
-        set score score + 1
-        set num_passengers_dropped_off num_passengers_dropped_off + 1
-      ] 
-  ]
-end
-
 to-report destinations-that-should-be-on-bus
   let destinations_list []
   foreach n-values 24 [?] [
@@ -517,6 +406,109 @@ to-report destinations-that-should-be-on-bus
   ]
   report destinations_list
 end
+
+;__________________________________________________________________________________________________________________________________________
+;PICK-UPS and DROP-OFFS
+;__________________________________________________________________________________________________________________________________________
+
+to drop-off-all-passengers
+  foreach bus_passengers [ 
+    drop-off-passenger item 0 ?
+    set num_passengers_dropped_off num_passengers_dropped_off + 1
+  ]
+end
+
+to pick-up-optimal-passengers
+  let votes_for_next_destination votes-for-next-destination current_stop
+  let passengers_here get-passengers-at-stop current_stop
+  foreach passengers_here [
+    if item (item 1 ?) votes_for_next_destination = next_intended_stop [
+      if length bus_passengers != bus_size [
+        pick-up-passenger item 0 ?
+        set num_passengers_picked_up num_passengers_picked_up + 1
+      ]
+    ]
+  ]
+end
+
+to pick-up-beneficial-passengers
+;calculating beneficial destinations based on where the bus is going next
+  if next_intended_stop != -1 [
+    set beneficial_destinations destinations-that-should-be-on-bus
+  ]
+  ;picking up passengers who would benefit from getting on the bus
+  let passengers_here get-passengers-at-stop current_stop
+  foreach passengers_here [
+    if member? item 1 ? beneficial_destinations [
+      ifelse length bus_passengers != bus_size [
+        pick-up-passenger item 0 ?
+        set num_passengers_picked_up num_passengers_picked_up + 1
+      ]
+      [
+        set num_passengers_could_not_pick_up (num_passengers_could_not_pick_up + 1)
+      ]
+    ]
+  ]
+end
+
+;__________________________________________________________________________________________________________________________________________
+;VOTING SYSTEM (METHODS FOR ADDING NEW BUSES)
+;__________________________________________________________________________________________________________________________________________
+to make-new-buses
+  if bus_id = 24 [ 
+      if ticks <= 10 and ticks != 2 [ 
+        add-bus 2
+        set total_num_buses total_num_buses + 1
+      ]
+      if ticks = 2 [
+        add-bus 3
+        set total_num_buses total_num_buses + 1
+      ]
+  ]
+end
+
+to aggregate-vote
+  let recent_votes []
+  let special_votes []
+  if bus_id = 24 [
+    if length inbox > 0 [
+      set recent_votes filter [ item 0 ? = ticks - 1 ] inbox
+      set special_votes filter [item 2 item 2 ? = "special vote for new bus" ] recent_votes
+    ]
+    let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
+    let num_passengers_in_system sum passengers_waiting_at_each_stop
+    ifelse length special_votes >= floor (0.5 * (total_num_buses - 1)) and total_num_buses > 5 [
+      show word "SPECIAL VOTE IN PROGRESS at time: " ticks
+      repeat 5 * floor (num_passengers_in_system / (total_num_buses * 60)) [ 
+        if random 1440 > ticks + 200 [ 
+          add-bus 3
+          show "SYSTEM AT HIGH CAPACITY: adding new big bus"
+        ]
+      ]
+    ]
+    [
+      if length recent_votes >= floor (0.5 * (total_num_buses - 1)) and total_num_buses > 5 [
+        show word "NORMAL VOTE IN PROGRESS at time: " ticks
+        repeat 5 * floor (num_passengers_in_system / (total_num_buses * 60)) [ 
+          if random 1440 > ticks + 200 [ 
+            add-bus 2
+            show "SYSTEM AT CAPACITY: adding new bus"
+          ]
+        ]
+      ]
+    ]
+  ]
+end
+
+to cast-vote
+  if num_passengers_could_not_pick_up >= (0.05 * bus_size) and num_passengers_could_not_pick_up < bus_size and bus_id != 24 [
+    send-message 24 ["-inform-" "-(string) cast vote-" "vote for new bus"]
+  ]
+  if num_passengers_could_not_pick_up > (0.5 * bus_size) and bus_id != 24 [
+    send-message 24 ["-inform-" "-(string) cast vote-" "special vote for new bus"]
+  ]
+end
+
 ;__________________________________________________________________________________________________________________________________________
 ;BARGAINING SYSTEM
 ;__________________________________________________________________________________________________________________________________________
@@ -524,12 +516,12 @@ end
 to initiate-bargaining
   if bus_id = 24 [
     if length inbox > 0 [
-      let recent_random_destinations filter [ item 0 ? >= ticks - 3 and is-list? item 2 ? ] inbox
+      let recent_random_destinations filter [ item 0 ? >= ticks - 3 and  item 1 item 2 ? = "-(list) directions-"] inbox
       let numbers_for_each_destination []
       repeat 24 [ set numbers_for_each_destination lput [] numbers_for_each_destination ]
       foreach recent_random_destinations [
         let sender item 1 ?
-        let message_content item 2 ?
+        let message_content item 2 item 2 ?
         set numbers_for_each_destination replace-item (item 1 message_content) numbers_for_each_destination lput sender item (item 1 message_content) numbers_for_each_destination
       ]
       foreach numbers_for_each_destination [
@@ -537,7 +529,7 @@ to initiate-bargaining
         if length buses_in_negotiation > 1 [
           foreach buses_in_negotiation [
             if ? != 24 [
-              send-message ? buses_in_negotiation
+              send-message ? lput buses_in_negotiation list "-inform-" "-(int) buses in negotiation-" 
             ]
           ]
         ]
@@ -551,14 +543,14 @@ to enter-into-negotiation
   let buses_in_negotiation []
   foreach recent_messages [
     let sender item 1 ?
-    let message_content item 2 ?
+    let message_content item 2 item 2 ?
     if sender = 24 [
       set buses_in_negotiation message_content
     ]
   ]
   foreach buses_in_negotiation [
     if ? != bus_id [
-      send-message ? distance_from_destination
+      send-message ? lput distance_from_destination list "-inform-" "(int) distance from destination" 
     ]
   ]
 end
@@ -570,7 +562,9 @@ to respond-to-negotiation
     foreach recent_messages [
       set distances_of_negotiators lput item 2 ? distances_of_negotiators
     ]
-    if max distances_of_negotiators < distance_from_destination [
+    let num_passengers_at_stop length get-passengers-at-stop last long_term_path
+    let num_negotiators length distances_of_negotiators
+    if max distances_of_negotiators < distance_from_destination and num_passengers_at_stop < (num_negotiators * 60) [
       set intention "free movement"
       navigate
     ]

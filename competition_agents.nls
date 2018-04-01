@@ -97,7 +97,7 @@ to execute-actions
       ]
     ]
     if length bus_passengers < bus_size and intention = "free movement" [
-      if ticks mod 15 >= 13 [
+      if ticks mod 15 >= 13 and ticks < 1425 [
         set next_intended_stop -1
       ]
     ]
@@ -141,7 +141,7 @@ to make-new-buses
       if ticks mod 15 = 14 [
         let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
         let num_passengers_in_system sum passengers_waiting_at_each_stop
-        if num_passengers_in_system > total_num_buses * 60 [
+        if num_passengers_in_system > total_num_buses * 30 [
           repeat 10 * floor (num_passengers_in_system / (total_num_buses * 60)) [
             if random 1440 > (ticks + 300) [
               add-bus 2
@@ -186,7 +186,7 @@ to navigate
     ]
     
     ;occasionally heading to a busy stop (weighted by passenger count)
-    if random 8 = 0 [
+    if random 6 = 0 [
       let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
       let passenger_destinations_in_system where-are-passengers-in-system-going
       set passenger_destinations_in_system (map [? / 2] passenger_destinations_in_system)
@@ -194,8 +194,14 @@ to navigate
       set adjusted_passenger_destinations map ceiling adjusted_passenger_destinations
       if max passengers_waiting_at_each_stop != 0 [
         let stop_chosen choose-stop-by-probability adjusted_passenger_destinations
+        let distances_from_all_destinations sort distances-from-all-destinations stop_chosen
+        ifelse (length-of-path shortest-path current_stop stop_chosen > item 13 distances_from_all_destinations) [
+          navigate
+        ]
+        [
         set desire stop_chosen
         set intention "following orders"
+        ]
       ]
     ]
 end
@@ -360,4 +366,12 @@ to-report length-of-path [ path ]
     set pairwise_lengths lput (get-distance item ? path item (? + 1) path) pairwise_lengths
   ]
   report sum pairwise_lengths
+end
+
+to-report distances-from-all-destinations [bs_id]
+  let distances_from_all_destinations []
+  foreach n-values 24 [?] [
+    set distances_from_all_destinations lput length-of-path shortest-path ? bs_id distances_from_all_destinations
+  ]
+  report distances_from_all_destinations
 end
