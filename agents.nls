@@ -267,20 +267,24 @@ to navigate
     ]
     
     ;occasionally heading to a busy stop (weighted by passenger count)
-    if random 8 = 0 [
-      let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
-      let passenger_destinations_in_system where-are-passengers-in-system-going
-      set passenger_destinations_in_system (map [? / 2] passenger_destinations_in_system)
-      let adjusted_passenger_destinations (map / passengers_waiting_at_each_stop passenger_destinations_in_system)
-      set adjusted_passenger_destinations map ceiling adjusted_passenger_destinations
-      if max passengers_waiting_at_each_stop != 0 [
-        let stop_chosen choose-stop-by-probability adjusted_passenger_destinations
-        set desire stop_chosen
-        set intention "following orders"
-        set distance_from_destination length-of-path shortest-path current_stop desire
-        send-message 24 lput list current_stop desire list "-inform-" "-(list) directions-" 
-      ]
+    maby-head-to-busy-stop
+end
+
+to maby-head-to-busy-stop
+  if random 8 = 0 [
+    let passengers_waiting_at_each_stop map [ item 1 ? ] passengers-waiting-at-each-stop
+    let passenger_destinations_in_system where-are-passengers-in-system-going
+    set passenger_destinations_in_system (map [? / 2] passenger_destinations_in_system)
+    let adjusted_passenger_destinations (map / passengers_waiting_at_each_stop passenger_destinations_in_system)
+    set adjusted_passenger_destinations map ceiling adjusted_passenger_destinations
+    if max passengers_waiting_at_each_stop != 0 [
+      let stop_chosen choose-stop-by-probability adjusted_passenger_destinations
+      set desire stop_chosen
+      set intention "following orders"
+      set distance_from_destination length-of-path shortest-path current_stop desire
+      ;send-message 24 list current_stop desire
     ]
+  ]
 end
 
 ;__________________________________________________________________________________________________________________________________________
