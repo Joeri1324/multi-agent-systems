@@ -575,6 +575,10 @@ end
 ;SHORTEST PATH ALGORITHM
 ;__________________________________________________________________________________________________________________________________________
 
+; looks up the shortest path in the distances where the result
+; of running dijkstra algorithm on the entire graph is stored
+; iterates on the backpointer array reveresly to form the 
+; shortest path and returns it.
 to-report shortest-path [bs1 bs2]
   if bs1 = bs2 [ 
     report (list bs1)
