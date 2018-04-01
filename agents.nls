@@ -22,16 +22,15 @@ buses-own [
   next_intended_stop ; a next_stop style variable that we are allowed to modify
   bus_size;
 
-  distances ;  
-  belief; array which indexes
-  desire;
-  intention;
+  distances ;
+  desire ;
+  intention ;
   
   route_type; indexes which route (not strictly needed, but often easier than writing out the full route)
   route_path; if on route, specific route it follows
   mode; indexes whether on route or on free travel mode
-  num_passengers_could_not_pick_up
-  total_num_buses
+  num_passengers_could_not_pick_up ;used in voting for a new bus
+  total_num_buses ;counts the number of buses in the system
   distance_from_destination ;used for negotiations/argumentation
 ]
  
