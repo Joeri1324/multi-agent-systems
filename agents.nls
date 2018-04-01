@@ -610,8 +610,7 @@ to-report dijkstra [vertexFrom]
          set v ?
       ]
     ]
-    set Q remove v Q
-    ; set S lput v S ; add u to visited nodes
+    set Q remove v Q ; set S lput v S ; add u to visited nodes
     
     let adjacent item v graph
     foreach adjacent [
@@ -630,9 +629,5 @@ end
 
 ;path is represented as a list of bus_stop ids (e.g. [ 3 4 5 16 ])
 to-report length-of-path [ path ]
-  let pairwise_lengths []
-  foreach n-values (length path - 1) [?] [
-    set pairwise_lengths lput (get-distance item ? path item (? + 1) path) pairwise_lengths
-  ]
-  report sum pairwise_lengths
+  report sum (map [get-distance item ?1 path item ?2 path] (n-values (length path - 1) [?]) (n-values (length path - 1) [? + 1]))
 end
